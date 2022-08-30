@@ -15,11 +15,12 @@ Y = Float32.(CUDA.cu(reshape(video, :, size(video, 3))));
 A = initROIs(Y, frame_size);
 C = CUDA.zeros(Float32, (size(video, 3), size(A, 1)));
 b0 = sum(Y, dims=2) ./ Float32(sqrt(size(Y, 2)));
-b1 = CUDA.ones(Float32, size(Y, 1)) ./ Float32(sqrt(size(Y, 1)));
+b1 = view(Float32.(maximum(CUDA.CuArray(A); dims=1) .== 0), :);
+b1 ./= CUDA.norm(b1)
 f1 = CUDA.zeros(Float32, size(Y, 2));
 
-updateTraces!(Y, A, C, b0);
-A = updateROIs!(Y, A, C, b0);
+updateTraces!(Y, A, C, b0, b1, f1);
+A = updateROIs!(Y, A, C, b0, b1, f1);
 
 
 function roiPlot(rois)
