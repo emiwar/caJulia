@@ -2,13 +2,13 @@ import Statistics
 import CUDA
 import Images
 import SparseArrays
+import HDF5
 CUDA.allowscalar(false)
 include("initROIs.jl")
 include("fastHALS.jl")
 
-using HDF5
-video = h5open("../data/20211016_163921_animal1learnday1.nwb", "r") do fid
-    read(fid["analysis/recording_20211016_163921-PP-BP-MC/data"])
+video = HDF5.h5open("../data/20211016_163921_animal1learnday1.nwb", "r") do fid
+    HDF5.read(fid["analysis/recording_20211016_163921-PP-BP-MC/data"])
 end
 frame_size = size(video)[1:2]
 Y = Float32.(CUDA.cu(reshape(video, :, size(video, 3))));

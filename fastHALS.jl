@@ -62,3 +62,22 @@ function updateROIs!(Y, A, C, b0, b1, f1; max_iter=100)
     end
     return CUDA.cu(SparseArrays.sparse(Array(Ad)))
 end
+
+
+
+
+function rawTraces(Y, A, C, b0, b1, f1)
+    Ad = CUDA.CuArray(A)
+    AY = A*Y
+    AA = A*Ad'
+    Ab0 = Array(A*b0) ./ sqrt(size(C, 1))
+    b1Y = (b1'*Y)'
+    Ab1 = A*b1
+    Ab1h = Array(Ab1)
+    b0b1 = b0'*b1 ./ sqrt(size(C, 1))
+    C_new = similar(C)
+    for j=1:size(C, 2)
+        C_new[:, j] .= view(C, :, j) .+ view(AY, j, :) .- C*view(AA, j, :) .- Ab0[j] .- Ab1h[j]*f1
+    end
+    return C_new
+end
