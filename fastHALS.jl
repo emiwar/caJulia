@@ -26,7 +26,7 @@ function updateTraces!(Y, A, C, b0, b1, f1; max_iter=100)
     end
 end
 
-function updateROIs!(Y, A, C, b0, b1, f1; max_iter=100)
+function updateROIs!(Y, A, C, b0, b1, f1, frame_size; max_iter=100, roi_growth=1)
     Ad = CUDA.CuArray(A)
     YC = Y*C
     CC = C'*C
@@ -41,13 +41,14 @@ function updateROIs!(Y, A, C, b0, b1, f1; max_iter=100)
     a_new = CUDA.CuVector{Float32}(undef, size(A, 2))
     a_diff = CUDA.CuVector{Float32}(undef, size(A, 2))
     last_sqr_err = Inf
+    Amask = maskA(Ad, frame_size; growth=roi_growth)
     for it=1:max_iter
         sqr_err = 0.0
         for j=1:size(A, 1)
             a_new .= max.(view(Ad, j, :).*CCh[j,j] .+ view(YC, :, j) 
                           .- (view(CC, j:j, :)*Ad)[:]
                           .- view(b0, :)*f0Ch[j]
-                          .- view(b1, :)*f1Ch[j], 0)
+                          .- view(b1, :)*f1Ch[j], 0) .* view(Amask, j, :)
             a_new ./= CUDA.norm(a_new) .+ 1.0f-10
             a_diff .= a_new .- view(Ad, j, :)
             sqr_err += CUDA.norm(a_diff)
@@ -63,9 +64,6 @@ function updateROIs!(Y, A, C, b0, b1, f1; max_iter=100)
     return CUDA.cu(SparseArrays.sparse(Array(Ad)))
 end
 
-
-
-
 function rawTraces(Y, A, C, b0, b1, f1)
     Ad = CUDA.CuArray(A)
     AY = A*Y
@@ -74,10 +72,17 @@ function rawTraces(Y, A, C, b0, b1, f1)
     b1Y = (b1'*Y)'
     Ab1 = A*b1
     Ab1h = Array(Ab1)
-    b0b1 = b0'*b1 ./ sqrt(size(C, 1))
     C_new = similar(C)
     for j=1:size(C, 2)
         C_new[:, j] .= view(C, :, j) .+ view(AY, j, :) .- C*view(AA, j, :) .- Ab0[j] .- Ab1h[j]*f1
     end
     return C_new
+end
+
+function maskA(Ad, frame_size; growth=1)
+    kernel = CUDA.ones(1+2*growth, 1+2*growth, 1, 1)
+    A_reshaped = reshape(Float32.(Ad' .> 0.0), frame_size..., 1, size(A, 1));
+    conved = CUDA.CUDNN.cudnnConvolutionForward(kernel, A_reshaped; padding=growth)
+    Float32.(reshape(conved, size(A, 2), size(A, 1))' .> 0.0)
+    # CUDA.CuArray(CUDA.CUSPARSE.CuSparseMatrixCSR)
 end
