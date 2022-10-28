@@ -1,10 +1,10 @@
 import Statistics
 
-function merge(A, C; thres=.8)
-    Ad = CUDA.CuArray(A)
-    AA = Array(A*Ad')
-    corrs = Array(Statistics.cor(C))
-    N = size(A, 1)
+function Base.merge!(sol::Sol; thres=.8)
+    Ad = CUDA.CuArray(sol.A)
+    AA = sol.A*Ad' |> Array
+    corrs = Statistics.cor(sol.C) |> Array
+    N = size(sol.A, 1)
     to_delete = zeros(Bool, N)
     for i=1:N
         if to_delete[i]
@@ -14,14 +14,20 @@ function merge(A, C; thres=.8)
             if !(to_delete[j]) && AA[i, j] > 0 && corrs[i, j] > thres
                 Ad[i, :] .+= view(Ad, j, :)
                 Ad[i, :] ./= CUDA.norm(Ad[i, :]) .+ 1.0f-10
-                C[:, i] .+= view(C, :, j)
+                sol.R[:, i] .+= view(sol.R, :, j)
+                sol.C[:, i] .+= view(sol.C, :, j)
+                sol.S[:, i] .+= view(sol.S, :, j)
                 to_delete[j] = true
             end
         end
     end
-    A_new = CUDA.cu(SparseArrays.sparse(Array(Ad)[.!to_delete, :]))
-    C_new = C[:, .!to_delete]
-    A_new, C_new
+    sol.A = CUDA.cu(SparseArrays.sparse(Array(Ad)[.!to_delete, :]))
+    sol.R = sol.R[:, .!to_delete]
+    sol.C = sol.C[:, .!to_delete]
+    sol.S = sol.S[:, .!to_delete]
+    sol.gammas = sol.gammas[.!to_delete]
+    sol.lambdas = sol.lambdas[.!to_delete]
+    return to_delete
 end
 
 

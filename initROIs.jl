@@ -1,21 +1,21 @@
 include("negentropy_img.jl")
-function initROIs(video, frame_size; threshold=5.0, median_wnd=5)
-    N = size(video, 2)
-    m = sum(video, dims=2) ./ N
-    m2 = mapreduce(x->Float64(x)^2, +, video; dims=2) ./ N
+function initA!(Y, sol::Sol; threshold=5.0, median_wnd=5)
+    N = size(Y, 2)
+    m = sum(Y, dims=2) ./ N
+    m2 = mapreduce(x->Float64(x)^2, +, Y; dims=2) ./ N
     sd = sqrt.(m2 .- m.^2)
-    max_proj = maximum(video; dims=2)
-    projection = reshape(Array((max_proj .- m) ./ sd), frame_size...) 
+    max_proj = maximum(Y; dims=2)
+    projection = reshape(Array((max_proj .- m) ./ sd), sol.frame_size...) 
     rois_list = segment_peaks(projection, threshold, median_wnd)
     rois = SparseArrays.sparse(hcat(rois_list...)')
-    return CUDA.cu(rois)
+    sol.A = CUDA.cu(rois)
 end
 
-function initROIs_negentropy(Y, frame_size; threshold=5e-3, median_wnd=5)
-    projection = reshape(Array(negentropy_img(Y)), frame_size...)
+function initA_negentropy!(Y, sol::Sol; threshold=5e-3, median_wnd=5)
+    projection = reshape(Array(negentropy_img(Y)), sol.frame_size...)
     rois_list = segment_peaks_alt(projection, 0.5)
     rois = SparseArrays.sparse(hcat(rois_list...)')
-    return CUDA.cu(rois)
+    sol.A = CUDA.cu(rois)
 end
 
 function segment_peaks(projection, threshold, median_wnd)

@@ -52,33 +52,13 @@ function negentropy_est(x)
     return (sum(((x .- x_m)./sd).^3) ./ N)^2/12 + (kurtosis(x)-3)^2/48
 end
 
-function opt_oasis(raw, gamma_0=0.8, lambda_0=50.0)
-    loss(x) = negentropy_est(oasis(raw, x[1], x[2])[1] .- raw)
+function oasis_opt!(sol::Sol, j)
+    Rj = Array(sol.R[:, j])
+    loss(x) = negentropy_est(oasis(Rj, x[1], x[2])[1] .- Rj)
     #TODO constrain gamma, lambda > 0 (maybe for gamma something like > 0.5?)
-    sol = Optim.optimize(loss, [gamma_0, lambda_0]; iterations=10)
-    gamma, lambda = sol.minimizer
-    c, s = oasis(raw, gamma, lambda)
-    return c, s, gamma, lambda
+    opt = Optim.optimize(loss, [sol.gammas[j], sol.lambdas[j]]; iterations=10)
+    gamma, lambda = opt.minimizer
+    sol.C[:, j], sol.S[:, j] = oasis(Rj, gamma, lambda)
+    sol.gammas[j] = gamma
+    sol.lambdas[j] = lambda
 end
-
-function updateTracesOasis(Y, A, C, b0, b1, f1, gammas, lambdas)
-    Ad = CUDA.CuArray(A)
-    AY = A*Y |> Array
-    AA = A*Ad' |> Array
-    Ab0 = Array(A*b0) ./ sqrt(size(C, 1))
-    Ab1 = A*b1 |> Array
-    new_C = C |> Array
-    f1h = f1 |> Array
-    raw_Y = similar(new_C)
-    new_S = similar(new_C)
-    @showprogress for j=1:size(new_C, 2)
-        raw_Y[:, j] .= view(new_C, :, j) .+ view(AY, j, :) .- new_C*view(AA, j, :) .- Ab0[j] .- Ab1[j]*f1h
-        c, s, gamma, lambda = opt_oasis(view(raw_Y, :, j), gammas[j], lambdas[j])
-        new_C[:, j] = c
-        new_S[:, j] = s
-        gammas[j] = gamma
-        lambdas[j] = lambda
-    end
-    return new_C, raw_Y, new_S, gammas, lambdas
-end
-
