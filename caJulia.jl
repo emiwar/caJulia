@@ -10,6 +10,7 @@ include("initROIs.jl")
 include("fastHALS.jl")
 include("oasis_opt.jl")
 include("merge_split.jl")
+include("viz.jl")
 
 video = HDF5.h5open("../data/20211016_163921_animal1learnday1.nwb", "r") do fid
     HDF5.read(fid["analysis/recording_20211016_163921-PP-BP-MC/data"])

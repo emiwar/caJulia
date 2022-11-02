@@ -1,3 +1,4 @@
+import Images
 include("negentropy_img.jl")
 function initA!(Y, sol::Sol; threshold=5.0, median_wnd=5)
     N = size(Y, 2)

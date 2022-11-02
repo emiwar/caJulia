@@ -1,4 +1,5 @@
-
+import SparseArrays
+import CUDA
 mutable struct Sol
     A::CUDA.CUSPARSE.CuSparseMatrixCSC{Float32, Int32}
     R::CUDA.CuMatrix{Float32}
