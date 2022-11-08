@@ -3,6 +3,7 @@ import CUDA
 import Images
 import SparseArrays
 import HDF5
+import Colors
 import GLMakie
 using ProgressMeter
 include("videoLoader.jl")
@@ -27,3 +28,7 @@ GUI.updateTraces!(gui);
 GUI.updateFootprints!(gui);
 GUI.mergeCells!(gui);
 
+fig = GLMakie.Figure()
+ax = GLMakie.Axis(fig[1, 1])
+GLMakie.scatter!([GLMakie.Point2f(5.0, 5.0)], marker=:utriangle)
+display(fig)

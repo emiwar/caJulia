@@ -25,6 +25,7 @@ function Base.merge!(sol::Sol; thres=.8)
     sol.S = sol.S[:, .!to_delete]
     sol.gammas = sol.gammas[.!to_delete]
     sol.lambdas = sol.lambdas[.!to_delete]
+    sol.colors = sol.colors[.!to_delete]
     return to_delete
 end
 

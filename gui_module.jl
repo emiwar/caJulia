@@ -7,6 +7,7 @@ struct GUIState
     vid::Observable{Main.VideoLoader}
     timeSlider::Slider
     playing::Observable{Bool}
+    selectedNeuron::Observable{Int64}
 end
 
 function GUIState(vl::Main.VideoLoader)
@@ -20,7 +21,8 @@ function GUIState(vl::Main.VideoLoader)
                             range=@lift(1:$nFrames),
                             startvalue=1)).sliders[1]
     playing = Observable(false)
-    guiState = GUIState(fig, sol, vid, timeSlider, playing)
+    selectedNeuron = Observable(0)
+    guiState = GUIState(fig, sol, vid, timeSlider, playing, selectedNeuron)
     setupButtons(guiState, playerControls)
     setupImages(guiState)
     setupTraces(guiState)
@@ -66,6 +68,17 @@ function setupImages(guiState::GUIState)
     footprintSummary = lift(Main.roiImg, guiState.sol)
     heatmap!(ax3, @lift($footprintSummary[1]))
     ax3.aspect = DataAspect()
+    selectionMarker = lift(footprintSummary, guiState.selectedNeuron) do fpSm, sel
+        if checkbounds(Bool, fpSm[2], sel)
+            cartInd = fpSm[2][sel]
+            return [Point2f(cartInd[1], cartInd[2]-20)]
+        else
+            return Point2f[]
+        end
+    end
+    scatter!(ax3, selectionMarker, marker=:utriangle,
+             color=:white, markersize=20,)
+
     linkaxes!(ax1, ax2)
     linkaxes!(ax1, ax3)
 end
@@ -73,13 +86,16 @@ end
 function setupTraces(guiState::GUIState)
     traceAxis = Axis(guiState.fig[2, 1]; 
                      yticksvisible = false, yticks=([0], [""]))
+
+    objToI = IdDict{Lines{Tuple{Vector{GLMakie.GeometryBasics.Point{2, Float32}}}}, Int64}()
     on(guiState.sol) do s
         empty!(traceAxis)
         Ch = Array(s.C)
         Rh = Array(s.R)
         for i=1:size(Ch, 2)
-            lines!(traceAxis, Rh[:, i] .- 200*i, color=:gray)
-            lines!(traceAxis, Ch[:, i] .- 200*i, color=:black)
+            lines!(traceAxis, Rh[:, i] .- 200*i, color=:gray, linewidth=0.5)
+            l = lines!(traceAxis, Ch[:, i] .- 200*i, color=s.colors[i], linewidth=1.0)
+            objToI[l] = i
         end
         xlims!(traceAxis, 1, size(Ch, 1))
         vlines!(traceAxis, lift(t->[t], currentTime(guiState)), color=:red)
@@ -93,6 +109,15 @@ function setupTraces(guiState::GUIState)
                 mouse_pos = events(traceAxis).mouseposition[] .- (52, 0)
                 t = to_world(traceAxis.scene, Point2f(mouse_pos...))[1]
                 setTime!(guiState, t)
+        end
+    end
+
+    on(events(traceAxis).mouseposition) do event
+        obj, _ = GLMakie.pick(traceAxis)
+        if obj !== nothing && (obj in keys(objToI))
+            guiState.selectedNeuron[] = objToI[obj]
+        else
+            guiState.selectedNeuron[] = 0
         end
     end
 end

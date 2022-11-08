@@ -12,6 +12,7 @@ mutable struct Sol
     gammas::Vector{Float64}
     lambdas::Vector{Float64}
     frame_size::Tuple{Int64, Int64}
+    colors::Vector{Colors.RGB{Colors.N0f8}}
 end
 
 function Sol(height, width, length)
@@ -27,7 +28,8 @@ function Sol(height, width, length)
     f1 = CUDA.zeros(Float32, T)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
-    Sol(A, R, C, S, I, b0, b1, f1, gammas, lambdas, (height, width))
+    colors = Colors.RGB{Colors.N0f8}[]
+    Sol(A, R, C, S, I, b0, b1, f1, gammas, lambdas, (height, width), colors)
 end
 
 Sol(vl::VideoLoader) = Sol(vl.frameSize..., vl.nFrames)
@@ -41,4 +43,5 @@ function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
     sol.S = CUDA.zeros(Float32, T, N)
     sol.gammas = fill(gamma_guess, N)
     sol.lambdas = fill(lambda_guess, N)
+    sol.colors = map(rand_color, 1:N)
 end

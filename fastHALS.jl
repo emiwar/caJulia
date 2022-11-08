@@ -49,6 +49,7 @@ function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
     sol.S = sol.S[:, .!to_delete]
     sol.gammas = sol.gammas[.!to_delete]
     sol.lambdas = sol.lambdas[.!to_delete]
+    sol.colors = sol.colors[.!to_delete]
 end
 
 function zeroClamp!(sol::Sol, j)
