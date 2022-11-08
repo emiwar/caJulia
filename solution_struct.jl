@@ -5,6 +5,7 @@ mutable struct Sol
     R::CUDA.CuMatrix{Float32}
     C::CUDA.CuMatrix{Float32}
     S::CUDA.CuMatrix{Float32}
+    I::CUDA.CuMatrix{Float32}
     b0::CUDA.CuMatrix{Float32}
     b1::CUDA.CuVector{Float32}
     f1::CUDA.CuVector{Float32}
@@ -13,20 +14,23 @@ mutable struct Sol
     frame_size::Tuple{Int64, Int64}
 end
 
-function Sol(Y, frame_size)
-    M, T = size(Y)
-    M == prod(frame_size) || error("Y and frame_size do not match.")
+function Sol(height, width, length)
+    T = length
+    M = width*height
     A = CUDA.cu(SparseArrays.spzeros(Float32, 0, M))
     R = CUDA.zeros(Float32, T, 0)
     C = CUDA.zeros(Float32, T, 0)
     S = CUDA.zeros(Float32, T, 0)
+    I = CUDA.zeros(Float32, height, width)
     b0 = CUDA.zeros(Float32, M, 1)
     b1 = CUDA.zeros(Float32, M)
     f1 = CUDA.zeros(Float32, T)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
-    Sol(A, R, C, S, b0, b1, f1, gammas, lambdas, frame_size)
+    Sol(A, R, C, S, I, b0, b1, f1, gammas, lambdas, (height, width))
 end
+
+Sol(vl::VideoLoader) = Sol(vl.frameSize..., vl.nFrames)
 
 
 function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)

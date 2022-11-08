@@ -1,5 +1,3 @@
-import Statistics
-
 function Base.merge!(sol::Sol; thres=.8)
     Ad = CUDA.CuArray(sol.A)
     AA = sol.A*Ad' |> Array

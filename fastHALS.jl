@@ -1,6 +1,5 @@
-function updateTraces!(Y, sol::Sol; deconvFcn! = zeroClamp!)
-    AY = sol.A*Y
-    b1Y = (sol.b1'*Y)'
+function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!)
+    AY, b1Y = leftMul((sol.A, sol.b1'), vl);
     A = sol.A
     C = sol.C
     f1 = sol.f1
@@ -14,16 +13,16 @@ function updateTraces!(Y, sol::Sol; deconvFcn! = zeroClamp!)
         sol.R[:, j] .= view(C, :, j) .+ view(AY, j, :) .- C*view(AA, j, :) .- Ab0[j] .- Ab1h[j]*f1
         deconvFcn!(sol, j)
     end
-    sol.f1 .= b1Y .- C*Ab1 .- b0b1
+    sol.f1 .= view(b1Y, :) .- C*Ab1 .- b0b1
 end
 
-function updateROIs!(Y, sol::Sol; roi_growth=1)
-    YC = Y*sol.C
-    Yf1 = Y*sol.f1
+function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
+    YC, Yf1 = rightMul(vl, (sol.C, sol.f1))
+    #TODO: Unneccesary loop through the video here; could just cache this!
+    Yf0 = mapreduce(x->x, +, vl, 0.0f0) ./ sqrt(size(sol.C, 1));
     C = sol.C
     b0 = sol.b0
     b1 = sol.b1
-    Yf0 = sum(Y, dims=2) ./ sqrt(size(C, 1))
     Ad = CUDA.CuArray(sol.A)
     CC = C'*C
     CCh = Array(CC)
@@ -64,6 +63,13 @@ function maskA(Ad, frame_size; growth=1)
     # CUDA.CuArray(CUDA.CUSPARSE.CuSparseMatrixCSR)
 end
 
+
+function initBackground!(vl::VideoLoader, sol::Sol)
+    sol.b0 .= mapreduce(x->x, +, vl, 0.0f0) ./ Float32(sqrt(vl.nFrames));
+    sol.b1 .= view(Float32.(maximum(CUDA.CuArray(sol.A); dims=1) .== 0), :);
+    sol.b1 ./= CUDA.norm(sol.b1)
+    sol.f1 .= 0.0f0
+end
 
 function initBackground!(Y, sol::Sol)
     sol.b0 .= sum(Y, dims=2) ./ Float32(sqrt(size(Y, 2)));

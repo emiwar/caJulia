@@ -1,6 +1,13 @@
 import Images
-include("negentropy_img.jl")
-function initA!(Y, sol::Sol; threshold=5.0, median_wnd=5)
+
+function initA!(sol::Sol; threshold=2e-2)
+    projection = reshape(Array(sol.I), sol.frame_size...) 
+    rois_list = segment_peaks(projection, threshold)
+    rois = SparseArrays.sparse(hcat(rois_list...)')
+    sol.A = CUDA.cu(rois)
+end
+
+function initA_PNR!(Y, sol::Sol; threshold=5.0, median_wnd=5)
     N = size(Y, 2)
     m = sum(Y, dims=2) ./ N
     m2 = mapreduce(x->Float64(x)^2, +, Y; dims=2) ./ N
@@ -19,33 +26,34 @@ function initA_negentropy!(Y, sol::Sol; threshold=5e-3, median_wnd=5)
     sol.A = CUDA.cu(rois)
 end
 
-function segment_peaks(projection, threshold, median_wnd)
-    filtered = Images.mapwindow(Statistics.median, projection[:,:,1], (median_wnd, median_wnd))
-    segmentation = zeros(Int64, size(projection))
-    sorted_pixels = CartesianIndices(filtered)[sortperm(filtered[:]; rev=true)]
+function segment_peaks(I, threshold)#, median_wnd)
+    #filtered = Images.mapwindow(Statistics.median, projection[:,:,1], (median_wnd, median_wnd))
+    segmentation = zeros(Int64, size(I))
+    sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
     lin_inds = LinearIndices(segmentation)
     seg_id = 0
     q = CartesianIndex{2}[]
     rois_list = SparseArrays.SparseVector{Float32, Int32}[]
     for start_coord in sorted_pixels
         if segmentation[start_coord] == 0 &&
-            filtered[start_coord] > threshold
+            I[start_coord] > threshold
             seg_id += 1
             segmentation[start_coord] = seg_id
             push!(q, start_coord)
             push!(rois_list, SparseArrays.spzeros(Float32, length(segmentation)))
-            rois_list[seg_id][lin_inds[start_coord]] = projection[start_coord]
+            rois_list[seg_id][lin_inds[start_coord]] = I[start_coord]
             while !isempty(q)
                 coord = popfirst!(q)
                 for offs in [(0,1), (0,-1), (1,0), (-1,0)]
                     offs_coord = coord + CartesianIndex(offs...)
-                    if checkbounds(Bool, projection, offs_coord) &&
+                    if checkbounds(Bool, I, offs_coord) &&
                        segmentation[offs_coord] == 0 &&
-                       filtered[coord] > filtered[offs_coord]
+                       I[coord] > I[offs_coord] &&
+                       I[offs_coord] > 0
                             segmentation[offs_coord] = seg_id
                             push!(q, offs_coord)
                             linear_index = lin_inds[offs_coord]
-                            rois_list[seg_id][linear_index] = projection[offs_coord]
+                            rois_list[seg_id][linear_index] = I[offs_coord]
                     end
                 end
             end

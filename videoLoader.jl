@@ -1,11 +1,9 @@
-import HDF5
-import CUDA
-
 struct VideoLoader
     nFrames::Int64
     frameSize::Tuple{Int64, Int64}
     nSegs::Int64
     fileReader::Function
+    frameToSeg::Vector{Int64}
     hostArrays::Dict{Int64, Array{Int16, 3}}
     hostArraysOrder::Vector{Int64}
     deviceArrays::Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}
@@ -14,13 +12,13 @@ struct VideoLoader
     deviceMemory::Int64
 end
 
-function VideoLoader(nFrames, frameSize, nSegs, fileReader,
+function VideoLoader(nFrames, frameSize, nSegs, fileReader, frameToSeg,
                      hostMemory, deviceMemory)
     hostArrays = Dict{Int64, Array{Int16, 3}}()
     hostArraysOrder = Vector{Int64}()
     deviceArrays = Dict{Int64, CUDA.CuMatrix{Float32}}()
     deviceArraysOrder = Vector{Int64}()
-    VideoLoader(nFrames, frameSize, Int64(nSegs), fileReader,
+    VideoLoader(nFrames, frameSize, Int64(nSegs), fileReader, frameToSeg,
                 hostArrays, hostArraysOrder, deviceArrays, deviceArraysOrder,
                 Int64(hostMemory), Int64(deviceMemory))
 end
@@ -38,6 +36,7 @@ function HDFLoader(fileName, key; hostMemory=1e10, deviceMemory=1e10, deviceType
     min_dev_segs = Int64(ceil(est_device_memory / deviceMemory))
     n_segs = max(min_host_segs, min_dev_segs)
     frames_per_seg = Int64(ceil(nFrames / n_segs))
+    frame_to_seg = div.((1:nFrames) .- 1, frames_per_seg) .+ 1
     function fileReader(seg_id)
         start_frame = (seg_id-1)*frames_per_seg + 1
         end_frame = min(seg_id*frames_per_seg, nFrames)
@@ -45,24 +44,24 @@ function HDFLoader(fileName, key; hostMemory=1e10, deviceMemory=1e10, deviceType
             f[key][:, :, start_frame:end_frame]
         end
     end
-    VideoLoader(nFrames, (w, h), n_segs, fileReader, hostMemory, deviceMemory)
+    VideoLoader(nFrames, (w, h), n_segs, fileReader, frame_to_seg, hostMemory, deviceMemory)
 end
 
 function eachSegment(f::Function, vl::VideoLoader)
     processed = zeros(Bool, vl.nSegs)
     for seg_id in vl.deviceArraysOrder
-        f(vl.deviceArrays[seg_id])
+        f(seg_id, vl.deviceArrays[seg_id])
         processed[seg_id] = true
     end
     for seg_id in vl.hostArraysOrder
         if !processed[seg_id]
-            f(loadToDevice!(vl, seg_id))
+            f(seg_id, loadToDevice!(vl, seg_id))
             processed[seg_id] = true
         end
     end
     for seg_id=1:vl.nSegs
         if !processed[seg_id]
-            f(loadToDevice!(vl, seg_id))
+            f(seg_id, loadToDevice!(vl, seg_id))
             processed[seg_id] = true
         end
     end
@@ -70,6 +69,7 @@ end
 
 hostType(vl::VideoLoader) = eltype(eltype(values(vl.hostArrays)))
 deviceType(vl::VideoLoader) = eltype(eltype(values(vl.deviceArrays)))
+
 
 function loadToDevice!(vl::VideoLoader, seg_id::Int64)
     if seg_id in keys(vl.deviceArrays)
@@ -118,7 +118,64 @@ function reduceToFit!(arrays, arraysOrder, required_memory, max_memory)
     end
 end
 
+function getFrameHost(vl::VideoLoader, frame_id::Int64)
+    seg_id = vl.frameToSeg[frame_id]
+    offset = (seg_id-1)*Int64(ceil(vl.nFrames / vl.nSegs))
+    seg = loadToHost!(vl, seg_id)
+    return seg[:, :, frame_id-offset]
+end
 
-hdfLoader = HDFLoader("../data/20211016_163921_animal1learnday1.nwb",
-                      "analysis/recording_20211016_163921-PP-BP-MC/data";
-                      deviceMemory=2e10, hostMemory=2e10)
+n_frames(vl::VideoLoader) = vl.nFrames
+
+function extrema(vl::VideoLoader)
+    Y_min = Inf
+    Y_max = -Inf
+    eachSegment(vl) do _, seg
+        Y_min = min(Y_min, minimum(seg))
+        Y_max = max(Y_max, maximum(seg))
+    end
+    return Y_min, Y_max
+end
+
+function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2)
+    dims == 2 || error("Only dims=2 is implemented for mapreduce")
+    res = CUDA.fill(init, (prod(vl.frameSize), 1))
+    eachSegment(vl) do _, seg
+        res .= op.(res, CUDA.mapreduce(f, op, seg; init=init, dims=dims))
+    end
+    CUDA.synchronize()
+    return res
+end
+
+function leftMul(mats::Tuple, vl::VideoLoader)
+    T = vl.nFrames 
+    M = prod(vl.frameSize)
+    for m in mats
+        size(m, 2) == M || error("Matrix size doesn't match video")
+    end
+    res = Tuple(CUDA.zeros(size(m, 1), T) for m in mats)
+    frames_per_seg = Int64(ceil(T / vl.nSegs))
+    eachSegment(vl) do seg_id, seg
+        start_frame = (seg_id-1)*frames_per_seg + 1
+        end_frame = min(seg_id*frames_per_seg, T)
+        for (i, m) in enumerate(mats)
+            res[i][:, start_frame:end_frame] .= m*seg
+        end
+    end
+    return res
+end
+
+function rightMul(vl::VideoLoader, mats::Tuple)
+    T = vl.nFrames
+    M = prod(vl.frameSize)
+    for m in mats
+        size(m, 1) == T || error("Matrix size doesn't match video")
+    end
+    res = Tuple(CUDA.zeros(M, size(m, 2)) for m in mats)
+    eachSegment(vl) do seg_id, seg
+        for (i, m) in enumerate(mats)
+            res[i] .+= seg*m
+        end
+    end
+    return res
+end
