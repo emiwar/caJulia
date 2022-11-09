@@ -23,8 +23,11 @@ function VideoLoader(nFrames, frameSize, nSegs, fileReader, frameToSeg,
                 Int64(hostMemory), Int64(deviceMemory))
 end
 
-function HDFLoader(fileName, key; hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
+function HDFLoader(fileName; hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
     fid = HDF5.h5open(fileName, "r")
+    all_keys = HDF5.keys(fid["/analysis"])
+    @assert length(all_keys)==1
+    key = "/analysis/"*all_keys[1]*"/data"
     dataset = fid[key]
     w, h, nFrames = size(dataset)
     hostType = eltype(dataset)
@@ -172,9 +175,12 @@ function rightMul(vl::VideoLoader, mats::Tuple)
         size(m, 1) == T || error("Matrix size doesn't match video")
     end
     res = Tuple(CUDA.zeros(M, size(m, 2)) for m in mats)
+    frames_per_seg = Int64(ceil(T / vl.nSegs))
     eachSegment(vl) do seg_id, seg
+        start_frame = (seg_id-1)*frames_per_seg + 1
+        end_frame = min(seg_id*frames_per_seg, T)
         for (i, m) in enumerate(mats)
-            res[i] .+= seg*m
+            res[i] .+= seg*view(m, start_frame:end_frame, :)
         end
     end
     return res
