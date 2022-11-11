@@ -1,10 +1,10 @@
-struct VideoLoader
+struct VideoLoader{HostType}
     nFrames::Int64
     frameSize::Tuple{Int64, Int64}
     nSegs::Int64
     fileReader::Function
     frameToSeg::Vector{Int64}
-    hostArrays::Dict{Int64, Array{Int16, 3}}
+    hostArrays::Dict{Int64, Array{HostType, 3}}
     hostArraysOrder::Vector{Int64}
     deviceArrays::Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}
     deviceArraysOrder::Vector{Int64}
@@ -13,21 +13,24 @@ struct VideoLoader
 end
 
 function VideoLoader(nFrames, frameSize, nSegs, fileReader, frameToSeg,
-                     hostMemory, deviceMemory)
-    hostArrays = Dict{Int64, Array{Int16, 3}}()
+                     hostMemory, deviceMemory, HostType)
+    hostArrays = Dict{Int64, Array{HostType, 3}}()
     hostArraysOrder = Vector{Int64}()
-    deviceArrays = Dict{Int64, CUDA.CuMatrix{Float32}}()
+    deviceArrays = Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}()
     deviceArraysOrder = Vector{Int64}()
     VideoLoader(nFrames, frameSize, Int64(nSegs), fileReader, frameToSeg,
                 hostArrays, hostArraysOrder, deviceArrays, deviceArraysOrder,
                 Int64(hostMemory), Int64(deviceMemory))
 end
 
-function HDFLoader(fileName; hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
+function HDFLoader(fileName; key=nothing, hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
     fid = HDF5.h5open(fileName, "r")
-    all_keys = HDF5.keys(fid["/analysis"])
-    @assert length(all_keys)==1
-    key = "/analysis/"*all_keys[1]*"/data"
+    if key === nothing
+        all_keys = HDF5.keys(fid["/analysis"])
+        @assert length(all_keys)==1
+        key = "/analysis/"*all_keys[1]*"/data"
+    end
+    key = string(key)
     dataset = fid[key]
     w, h, nFrames = size(dataset)
     hostType = eltype(dataset)
@@ -47,22 +50,22 @@ function HDFLoader(fileName; hostMemory=1e10, deviceMemory=1e10, deviceType=Floa
             f[key][:, :, start_frame:end_frame]
         end
     end
-    VideoLoader(nFrames, (w, h), n_segs, fileReader, frame_to_seg, hostMemory, deviceMemory)
+    VideoLoader(nFrames, (w, h), n_segs, fileReader, frame_to_seg, hostMemory, deviceMemory, hostType)
 end
 
 function eachSegment(f::Function, vl::VideoLoader)
     processed = zeros(Bool, vl.nSegs)
-    for seg_id in vl.deviceArraysOrder
+    @showprogress "Device segs" for seg_id in vl.deviceArraysOrder
         f(seg_id, vl.deviceArrays[seg_id])
         processed[seg_id] = true
     end
-    for seg_id in vl.hostArraysOrder
+    @showprogress "Host segs" for seg_id in vl.hostArraysOrder
         if !processed[seg_id]
             f(seg_id, loadToDevice!(vl, seg_id))
             processed[seg_id] = true
         end
     end
-    for seg_id=1:vl.nSegs
+    @showprogress "Disk segs" for seg_id=1:vl.nSegs
         if !processed[seg_id]
             f(seg_id, loadToDevice!(vl, seg_id))
             processed[seg_id] = true
@@ -94,7 +97,7 @@ function loadToHost!(vl::VideoLoader, seg_id::Int64)
     driveArray = vl.fileReader(seg_id)
     required_memory  = length(driveArray)*(sizeof(hostType(vl)))
     reduceToFit!(vl.hostArrays, vl.hostArraysOrder, required_memory, vl.hostMemory)
-    vl.hostArrays[seg_id] = Array(driveArray)
+    vl.hostArrays[seg_id] = driveArray#hostType(vl).(driveArray)
     insert!(vl.hostArraysOrder, 1, seg_id)
     #println("Loaded segment $seg_id into host memory")
     return vl.hostArrays[seg_id]
