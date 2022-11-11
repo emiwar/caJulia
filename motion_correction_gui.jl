@@ -4,7 +4,7 @@ include("motion_correction.jl")
 example_files = ["../data/recording_20211016_163921.hdf5",
                  "../data/recording_20220919_135612.hdf5"]
 
-vl = HDFLoader(example_files[1], key="/images",
+vl = HDFLoader(example_files[2], key="/images",
                deviceMemory=5e9);
 
 originalVideoHost = loadToHost!(vl, 1);
@@ -68,3 +68,20 @@ ax2.aspect = GLMakie.DataAspect()
 
 GLMakie.linkaxes!(ax1, ax2)
 GLMakie.display(fig)
+
+
+
+
+
+
+#import VideoIO
+#encoder_options = (color_range=2, crf=0, preset="slow")
+#first_frame = reshape(Array(view(originalVideoDevice, :, 1) .- minFrame), vl.frameSize...)
+#uint_first_frame = UInt8.(floor.(clamp.(first_frame .- 78, 0, 255)))
+#VideoIO.open_video_out("example_video.mp4", uint_first_frame, framerate=20; encoder_options) do writer
+#    @showprogress "Writing video" for t = axes(originalVideoDevice,2)
+#        frame = reshape(Array(view(originalVideoDevice, :, t) .- minFrame), vl.frameSize...)
+#        uint_frame = UInt8.(floor.(clamp.(frame .- 78, 0, 255)))
+#        VideoIO.write(writer, uint_frame)
+#    end
+#end

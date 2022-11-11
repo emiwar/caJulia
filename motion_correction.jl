@@ -7,9 +7,6 @@ CUDA.allowscalar(false)
 include("videoLoader.jl")
 
 struct MotionCorrecter{PlanT}
-    nFrames::Int64
-    frameSize::Tuple{Int64, Int64}
-    arrays::Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}
     shifts::Vector{Tuple{Int64, Int64}}
     phaseDiffs::Vector{Float32}
     freqs1::CUDA.CUFFT.AbstractFFTs.Frequencies{Float32}
@@ -18,41 +15,63 @@ struct MotionCorrecter{PlanT}
 end
 
 function MotionCorrecter(nFrames, frameSize)
-    arrays = Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}()
     shifts = fill((0, 0), nFrames)
     phaseDiffs = fill(0.0f0, nFrames)
     dummyFrame = CUDA.CuMatrix{Float32}(undef, frameSize...)
     freqs1 = CUDA.CUFFT.fftfreq(frameSize[1], 1.0f0)
     freqs2 = CUDA.CUFFT.fftfreq(frameSize[2], 1.0f0)
     plan = CUDA.CUFFT.plan_fft(dummyFrame)
-    MotionCorrecter(nFrames, frameSize, arrays, shifts, phaseDiffs,
-                    freqs1, freqs2, plan)
+    MotionCorrecter(shifts, phaseDiffs, freqs1, freqs2, plan)
 end
 
 MotionCorrecter(vl::VideoLoader) = MotionCorrecter(vl.nFrames, vl.frameSize)
 
-function loadCorrectedSeg!(motionCorrecter, videoLoader, seg_id::Int64)
-    if seg_id in keys(motionCorrecter.arrays)
-        return motionCorrecter.arrays[seg_id]
-    end
-    source = loadToDevice!(videoLoader, seg_id)
-    result = similar(source)
-    @showprogress "Shifting video" for frame_id=1:size(source, 2)
-        freq = motionCorrecter.plan * reshape(view(source, :, frame_id),
-                                               motionCorrecter.frameSize)
+function shiftSegment!(motionCorrecter::MotionCorrecter, seg, frame_size,
+                       frame_inds)
+    shifted_freq = CUDA.CuMatrix{Complex{Float32}}(undef, frame_size...)
+    shifted = CUDA.CuVector{Complex{Float32}}(undef, prod(frame_size))
+    @showprogress "Shifting video" for i=axes(seg, 2)
+        frame_id = frame_inds[i]
+        freq = motionCorrecter.plan * reshape(view(seg, :, i), frame_size...)
         shift = motionCorrecter.shifts[frame_id]
         phaseDiff = motionCorrecter.phaseDiffs[frame_id]
-        shifted_freq = freq .* cis.(-Float32(2pi) .* (motionCorrecter.freqs1 .* shift[1] .+
-                                                      motionCorrecter.freqs2' .* shift[2]) .+
-                                                      phaseDiff)
-        result[:, frame_id] .= view(real(motionCorrecter.plan \ shifted_freq), :)
+        shifted_freq .= freq .* cis.(-Float32(2pi) .* (motionCorrecter.freqs1 .* shift[1] .+
+                                                       motionCorrecter.freqs2' .* shift[2]) .+
+                                                       phaseDiff)
+        shifted .= view(motionCorrecter.plan \ shifted_freq, :)
+        seg[:, i] .= real.(shifted)
     end
-    motionCorrecter.arrays[seg_id] = result
-    return result
 end
 
-
-
+function fitMotionCorrection!(vl::VideoLoader, sol::Sol)
+    mc = vl.motionCorrecter
+    eachSegment(vl; shift=false) do seg_id, seg
+        frameRange = vl.frameRanges[seg_id]
+        frameSize = vl.frameSize
+        cntr = (1 .+ frameSize) ./ 2
+        @showprogress "Motion correcting" for i=axes(seg, 2)
+            frame_id = frameRange[i]
+            raw_frame = reshape(view(seg, :, i), frameSize...)
+            raw_freq = mc.plan * raw_frame;
+            target_frame = reshape(reconstruct_frame(sol, frame_id), frame_size...)
+            target_freq = mc.plan * target_frame
+            cross_corr_freq = raw_freq .* conj(target_freq)
+            cross_corr = plan \ cross_corr_freq
+            _, maxidx = CUDA.findmax(abs.(cross_corr))
+            max_val = @CUDA.allowscalar cross_corr[maxidx]
+            phaseDiff = atan(imag(max_val), real(max_val))
+            shift = ifelse.(maxidx.I .> cntr, maxidx.I .- frameSize, maxidx.I) .- 1
+            shifted_freq = freq .* cis.(-Float32(2pi) .* (motionCorrecter.freqs1 .* shift[1] .+
+                                                           motionCorrecter.freqs2' .* shift[2]) .+
+                                                           phaseDiff)
+            shifted = real(mc.plan \ shifted_freq)
+            seg[:, i] .= view(shifted, :)
+            mc.shifts[frame_id] = shift
+            mc.phaseDiff[frame_id] = phaseDiff
+        end
+        vl.deviceArraysShifted[seg_id] = true
+    end
+end
 
 
 
