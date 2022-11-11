@@ -10,6 +10,10 @@ vl = HDFLoader(example_files[1], key="/images",
 originalVideoHost = loadToHost!(vl, 1);
 originalVideoDevice = loadToDevice!(vl, 1);
 
+mc = MotionCorrecter(vl)
+mc.shifts .= [(round(25*cos(2pi*t/40)), round(25*sin(2pi*t/40))) for t=1:mc.nFrames]
+@CUDA.time shiftedVideoDevice = loadCorrectedSeg!(mc, vl, 1);
+
 fig = GLMakie.Figure()
 
 fig[2, 1] = playerControls = GLMakie.GridLayout()
@@ -36,12 +40,16 @@ GLMakie.on((_)->stepTime!(1), nextFrameButton.clicks)
 
 fig[1, 1] = topRow = GLMakie.GridLayout()
 minFrame = minimum(originalVideoDevice; dims=2);
-subtractMin = GLMakie.Observable(false)
-current_frame = GLMakie.lift( timeSlider.value, subtractMin) do t, sm
-    if sm
-        reshape(Array(view(originalVideoDevice, :, t) .- minFrame), vl.frameSize...)
+videoDisplayType = GLMakie.Observable(:original)
+current_frame = GLMakie.lift( timeSlider.value, videoDisplayType) do t, vdt
+    if vdt == :original
+        return reshape(Array(view(originalVideoDevice, :, t)), vl.frameSize...)
+    elseif vdt == :motion_corrected
+        return reshape(Array(view(shiftedVideoDevice, :, t)), vl.frameSize...)
+    elseif vdt == :minimum_subtracted
+        return reshape(Array(view(originalVideoDevice, :, t) .- minFrame), vl.frameSize...)
     else
-        originalVideoHost[:, :, t]
+        error("Unknown videoDisplayType $vdt")
     end
 end
 

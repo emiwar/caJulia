@@ -6,6 +6,65 @@ CUDA.allowscalar(false)
 
 include("videoLoader.jl")
 
+struct MotionCorrecter{PlanT}
+    nFrames::Int64
+    frameSize::Tuple{Int64, Int64}
+    arrays::Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}
+    shifts::Vector{Tuple{Int64, Int64}}
+    phaseDiffs::Vector{Float32}
+    freqs1::CUDA.CUFFT.AbstractFFTs.Frequencies{Float32}
+    freqs2::CUDA.CUFFT.AbstractFFTs.Frequencies{Float32}
+    plan::PlanT
+end
+
+function MotionCorrecter(nFrames, frameSize)
+    arrays = Dict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}()
+    shifts = fill((0, 0), nFrames)
+    phaseDiffs = fill(0.0f0, nFrames)
+    dummyFrame = CUDA.CuMatrix{Float32}(undef, frameSize...)
+    freqs1 = CUDA.CUFFT.fftfreq(frameSize[1], 1.0f0)
+    freqs2 = CUDA.CUFFT.fftfreq(frameSize[2], 1.0f0)
+    plan = CUDA.CUFFT.plan_fft(dummyFrame)
+    MotionCorrecter(nFrames, frameSize, arrays, shifts, phaseDiffs,
+                    freqs1, freqs2, plan)
+end
+
+MotionCorrecter(vl::VideoLoader) = MotionCorrecter(vl.nFrames, vl.frameSize)
+
+function loadCorrectedSeg!(motionCorrecter, videoLoader, seg_id::Int64)
+    if seg_id in keys(motionCorrecter.arrays)
+        return motionCorrecter.arrays[seg_id]
+    end
+    source = loadToDevice!(videoLoader, seg_id)
+    result = similar(source)
+    @showprogress "Shifting video" for frame_id=1:size(source, 2)
+        freq = motionCorrecter.plan * reshape(view(source, :, frame_id),
+                                               motionCorrecter.frameSize)
+        shift = motionCorrecter.shifts[frame_id]
+        phaseDiff = motionCorrecter.phaseDiffs[frame_id]
+        shifted_freq = freq .* cis.(-Float32(2pi) .* (motionCorrecter.freqs1 .* shift[1] .+
+                                                      motionCorrecter.freqs2' .* shift[2]) .+
+                                                      phaseDiff)
+        result[:, frame_id] .= view(real(motionCorrecter.plan \ shifted_freq), :)
+    end
+    motionCorrecter.arrays[seg_id] = result
+    return result
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function motionCorrectSegment(seg, target_frame)
     plan = CUDA.CUFFT.plan_fft(target_frame);
     target_frame_freq = plan * target_frame
