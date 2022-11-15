@@ -6,6 +6,7 @@ import HDF5
 import Colors
 import GLMakie
 using ProgressMeter
+include("motion_correction.jl")
 include("videoLoader.jl")
 include("solution_struct.jl")
 include("negentropy_img.jl")
@@ -25,14 +26,14 @@ example_files_mc = ["recording_20211016_163921-MC.h5",
                     "recording_20220919_135612-MC.h5"]
 example_files_huge = ["recording_20211016_163921.hdf5",
                       "recording_20220919_135612.hdf5"]
-#hdfLoader = HDFLoader("../data/"*example_files[5];
-#                      deviceMemory=2e10, hostMemory=2e10);
-hdfLoader = HDFLoader("../data/"*example_files_mc[1]; key="/images",
+#hdfLoader = HDFLoader("../data/"*example_files_mc[1]; key="/images",
+#                      deviceMemory=8e9, hostMemory=4.0e10);
+hdfLoader = HDFLoader("../fake_videos/fake1.h5"; key="/images",
                       deviceMemory=8e9, hostMemory=4.0e10);
 gui = GUI.GUIState(hdfLoader);
 display(gui.fig)
 GUI.calcI!(gui);
-GUI.initA!(gui);
+GUI.initA!(gui; median_wnd=5);
 GUI.initBackground!(gui);
 GUI.updateTraces!(gui);
 GUI.updateFootprints!(gui);

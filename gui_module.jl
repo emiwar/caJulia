@@ -45,29 +45,54 @@ end
 function setupImages(guiState::GUIState)
 
     guiState.fig[1, 1] = topRow = GridLayout()
+
     current_frame = lift(Main.getFrameHost, guiState.vid, currentTime(guiState))
     Y_extrema = lift(Main.extrema, guiState.vid)
     contrast_range = lift((ex)->LinRange(ex[1], ex[2], 200), Y_extrema)
-    contrast_slider = IntervalSlider(topRow[1, 1],
+    contrast_slider = IntervalSlider(topRow[2, 1],
                                      range=contrast_range)
-    ax1 = Axis(topRow[2, 1])
+    ax1 = Axis(topRow[3, 1])
     image!(ax1, current_frame, colorrange=contrast_slider.interval,
                                interpolate=false)
     ax1.aspect = DataAspect()
 
-    ax2 = Axis(topRow[2, 2])
-    summaryImg = lift(s->reshape(Array(log10.(s.I)), s.frame_size...), guiState.sol)
-    summary_range_slider = IntervalSlider(topRow[1, 2],
-                    range=LinRange(-7, 2, 200), startvalues=(-2.5, 0.5))
-    image!(ax2, summaryImg; colorrange=summary_range_slider.interval,
-                            colormap=:inferno, nan_color=:black,
-                            interpolate=false)
+    second_video_menu = GLMakie.Menu(topRow[1, 2], options=[:motion_corrected,
+                                                            :reconstructed])
+    current_mc_frame = lift(guiState.vid,
+                            guiState.sol,
+                            currentTime(guiState),
+                            second_video_menu.selection) do vl, sol, t, sel
+        seg_id = Main.frame_to_seg(vl, t)
+        frame_id = t - (first(vl.frameRanges[seg_id]) - 1)
+        if sel==:motion_corrected
+            seg = Main.loadToDevice!(vl, seg_id, true)     
+            reshape(Array(seg[:, frame_id]), vl.frameSize...)
+        elseif sel==:reconstructed
+            reshape(Array(Main.reconstruct_frame(sol, frame_id)), vl.frameSize...)
+        else
+            zeros(Float32, vl.frameSize...)
+        end
+    end
+    contrast_slider_mc = IntervalSlider(topRow[2, 2],
+                                     range=contrast_range)
+    ax2 = Axis(topRow[3, 2])
+    image!(ax2, current_mc_frame, colorrange=contrast_slider_mc.interval,
+                               interpolate=false)
     ax2.aspect = DataAspect()
 
-    ax3 = Axis(topRow[2, 3])
-    footprintSummary = lift(Main.roiImg, guiState.sol)
-    heatmap!(ax3, @lift($footprintSummary[1]))
+    ax3 = Axis(topRow[3, 3])
+    summaryImg = lift(s->reshape(Array(log10.(s.I)), s.frame_size...), guiState.sol)
+    summary_range_slider = IntervalSlider(topRow[2, 3],
+                    range=LinRange(-7, 2, 200), startvalues=(-2.5, 0.5))
+    image!(ax3, summaryImg; colorrange=summary_range_slider.interval,
+                            colormap=:inferno, nan_color=:black,
+                            interpolate=false)
     ax3.aspect = DataAspect()
+
+    ax4 = Axis(topRow[3, 4])
+    footprintSummary = lift(Main.roiImg, guiState.sol)
+    heatmap!(ax4, @lift($footprintSummary[1]))
+    ax4.aspect = DataAspect()
     selectionMarker = lift(footprintSummary, guiState.selectedNeuron) do fpSm, sel
         if checkbounds(Bool, fpSm[2], sel)
             cartInd = fpSm[2][sel]
@@ -76,11 +101,12 @@ function setupImages(guiState::GUIState)
             return Point2f[]
         end
     end
-    scatter!(ax3, selectionMarker, marker=:utriangle,
+    scatter!(ax4, selectionMarker, marker=:utriangle,
              color=:white, markersize=20,)
 
     linkaxes!(ax1, ax2)
     linkaxes!(ax1, ax3)
+    linkaxes!(ax1, ax4)
 end
 
 function setupTraces(guiState::GUIState)
@@ -152,8 +178,8 @@ function calcI!(guiState::GUIState)
     guiState.sol[] = guiState.sol[]
 end
 
-function initA!(guiState::GUIState)
-    Main.initA!(guiState.sol[])
+function initA!(guiState::GUIState; kwargs...)
+    Main.initA!(guiState.sol[]; kwargs...)
     Main.zeroTraces!(guiState.sol[]);
     guiState.sol[] = guiState.sol[]
 end

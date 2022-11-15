@@ -45,3 +45,25 @@ function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
     sol.lambdas = fill(lambda_guess, N)
     sol.colors = map(rand_color, 1:N)
 end
+
+function reconstruct_frame(sol::Sol, frame_id::Int64)
+    f = (sol.C[frame_id, :]' * sol.A)'
+    f .+= view(sol.b0 ./ sqrt(size(sol.C, 1)), :)
+    f .+= @CUDA.allowscalar sol.b1 .* sol.f1[frame_id]
+    return f
+end
+
+function load_ground_truth(sol::Sol, filename::String)
+    HDF5.h5open(filename, "r") do fid
+         A = Array(fid["/ground_truth/A"])
+         A = reshape(A[50:end-51, 50:end-51, :], prod(size(A)[1:2] .- 100), size(A, 3))'
+         norms = sqrt.(sum(A .^ 2, dims=2))
+         A ./= norms
+         A[A .< 1e-5] .= 0.0
+         sol.A = CUDA.cu(SparseArrays.sparse(A))
+
+         zeroTraces!(sol)
+         C = Array(fid["/ground_truth/C"])
+         sol.C = CUDA.cu(C .* norms')
+    end
+end

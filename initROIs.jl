@@ -1,7 +1,10 @@
 import Images
 
-function initA!(sol::Sol; threshold=2e-2)
+function initA!(sol::Sol; threshold=2e-2, median_wnd=1)
     projection = reshape(Array(sol.I), sol.frame_size...) 
+    if median_wnd > 1
+        projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
+    end
     rois_list = segment_peaks(projection, threshold)
     rois = SparseArrays.sparse(hcat(rois_list...)')
     sol.A = CUDA.cu(rois)
