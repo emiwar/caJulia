@@ -1,4 +1,6 @@
 using OrderedCollections
+import CSV, DataFrames
+
 struct VideoLoader{HostType, MCPlanType}
     nFrames::Int64
     frameSize::Tuple{Int64, Int64}
@@ -24,7 +26,19 @@ function VideoLoader(nFrames, frameSize, nSegs, frameRanges, fileReader,
                 Int64(hostMemory), Int64(deviceMemory))
 end
 
-function HDFLoader(fileName; key=nothing, hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
+function Base.show(io::IO, vl::VideoLoader)
+    compact = get(io, :compact, false)
+    println(io, "VideoLoader")
+    println(io, "$(vl.nFrames) frames $(vl.frameSize)")
+    println(io, "Host (RAM) type: $(hostType(vl)); Device (GPU) type: $(deviceType(vl))")
+    println(io, "Number of segs: $(vl.nSegs)")
+    println(io, "Host segs: $(keys(vl.hostArrays))")
+    println(io, "Device segs: $(keys(vl.deviceArrays))")
+end
+
+function HDFLoader(fileName; key=nothing, hostMemory=1e10,
+                    deviceMemory=1e10, deviceType=Float32,
+                    maxFrames=typemax(Int64))
     fid = HDF5.h5open(fileName, "r")
     if key === nothing
         all_keys = HDF5.keys(fid["/analysis"])
@@ -34,9 +48,10 @@ function HDFLoader(fileName; key=nothing, hostMemory=1e10, deviceMemory=1e10, de
     key = string(key)
     dataset = fid[key]
     w, h, nFrames = size(dataset)
+    nFrames = min(nFrames, maxFrames)
     hostType = eltype(dataset)
-    est_host_memory = sizeof(hostType) * length(dataset)
-    est_device_memory = (sizeof(deviceType)+sizeof(hostType)) * length(dataset)
+    est_host_memory = sizeof(hostType) * (w*h*nFrames)
+    est_device_memory = (sizeof(deviceType)+sizeof(hostType)) * (w*h*nFrames)
     #println("Est. device memory: $est_device_memory")
     #println("Limit device memory: $deviceMemory")
     min_host_segs = Int64(ceil(est_host_memory / hostMemory))
@@ -57,7 +72,7 @@ function HDFLoader(fileName; key=nothing, hostMemory=1e10, deviceMemory=1e10, de
                 hostMemory, deviceMemory, hostType)
 end
 
-function eachSegment(f::Function, vl::VideoLoader; shift::Bool=true)
+function eachSegment(f::Function, vl::VideoLoader; shift::Bool=false)
     processed = zeros(Bool, vl.nSegs)
     @showprogress "Device segs" for seg_id in keys(vl.deviceArrays)
         f(seg_id, loadToDevice!(vl, seg_id, shift))
@@ -81,7 +96,7 @@ hostType(vl::VideoLoader) = eltype(eltype(values(vl.hostArrays)))
 deviceType(vl::VideoLoader) = eltype(eltype(values(vl.deviceArrays)))
 
 
-function loadToDevice!(vl::VideoLoader, seg_id::Int64, shift::Bool=true)
+function loadToDevice!(vl::VideoLoader, seg_id::Int64, shift::Bool=false)
     if seg_id in keys(vl.deviceArrays) &&
        vl.deviceArraysShifted[seg_id] == shift
           return vl.deviceArrays[seg_id]
@@ -125,7 +140,7 @@ end
 
 function getFrameHost(vl::VideoLoader, frame_id::Int64)
     seg_id = frame_to_seg(vl, frame_id)
-    offset = (seg_id-1)*Int64(ceil(vl.nFrames / vl.nSegs))
+    offset = first(vl.frameRanges[seg_id])-1
     seg = loadToHost!(vl, seg_id)
     return seg[:, :, frame_id-offset]
 end
@@ -169,12 +184,9 @@ function leftMul(mats::Tuple, vl::VideoLoader)
         size(m, 2) == M || error("Matrix size doesn't match video")
     end
     res = Tuple(CUDA.zeros(size(m, 1), T) for m in mats)
-    frames_per_seg = Int64(ceil(T / vl.nSegs))
     eachSegment(vl) do seg_id, seg
-        start_frame = (seg_id-1)*frames_per_seg + 1
-        end_frame = min(seg_id*frames_per_seg, T)
         for (i, m) in enumerate(mats)
-            res[i][:, start_frame:end_frame] .= m*seg
+            res[i][:, vl.frameRanges[seg_id]] .= m*seg
         end
     end
     return res
@@ -187,12 +199,9 @@ function rightMul(vl::VideoLoader, mats::Tuple)
         size(m, 1) == T || error("Matrix size doesn't match video")
     end
     res = Tuple(CUDA.zeros(M, size(m, 2)) for m in mats)
-    frames_per_seg = Int64(ceil(T / vl.nSegs))
     eachSegment(vl) do seg_id, seg
-        start_frame = (seg_id-1)*frames_per_seg + 1
-        end_frame = min(seg_id*frames_per_seg, T)
         for (i, m) in enumerate(mats)
-            res[i] .+= seg*view(m, start_frame:end_frame, :)
+            res[i] .+= seg*view(m, vl.frameRanges[seg_id], :)
         end
     end
     return res

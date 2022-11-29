@@ -47,7 +47,7 @@ function setupImages(guiState::GUIState)
     guiState.fig[1, 1] = topRow = GridLayout()
 
     current_frame = lift(Main.getFrameHost, guiState.vid, currentTime(guiState))
-    Y_extrema = lift(Main.extrema, guiState.vid)
+    Y_extrema = Observable((0, 500))#lift(Main.extrema, guiState.vid)
     contrast_range = lift((ex)->LinRange(ex[1], ex[2], 200), Y_extrema)
     contrast_slider = IntervalSlider(topRow[2, 1],
                                      range=contrast_range)
@@ -56,8 +56,8 @@ function setupImages(guiState::GUIState)
                                interpolate=false)
     ax1.aspect = DataAspect()
 
-    second_video_menu = GLMakie.Menu(topRow[1, 2], options=[:motion_corrected,
-                                                            :reconstructed])
+    second_video_menu = GLMakie.Menu(topRow[1, 2], options=[:reconstructed,
+                                                            :motion_corrected])
     current_mc_frame = lift(guiState.vid,
                             guiState.sol,
                             currentTime(guiState),
