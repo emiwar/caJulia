@@ -64,11 +64,12 @@ function setupImages(guiState::GUIState)
                             second_video_menu.selection) do vl, sol, t, sel
         seg_id = Main.frame_to_seg(vl, t)
         frame_id = t - (first(vl.frameRanges[seg_id]) - 1)
+        video_id = Main.frame_to_video_id(vl, frame_id)
         if sel==:motion_corrected
             seg = Main.loadToDevice!(vl, seg_id, true)     
             reshape(Array(seg[:, frame_id]), vl.frameSize...)
         elseif sel==:reconstructed
-            reshape(Array(Main.reconstruct_frame(sol, frame_id)), vl.frameSize...)
+            reshape(Array(Main.reconstruct_frame(sol, frame_id, video_id)), vl.frameSize...)
         else
             zeros(Float32, vl.frameSize...)
         end

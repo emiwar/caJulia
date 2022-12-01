@@ -4,7 +4,7 @@ import CSV, DataFrames
 struct VideoLoader{HostType, MCPlanType}
     nFrames::Int64
     frameSize::Tuple{Int64, Int64}
-    nSegs::Int64
+    segsPerVideo::Vector{Vector{Int64}}
     frameRanges::Vector{UnitRange{Int64}}
     fileReader::Function
     motionCorrecter::MotionCorrecter{MCPlanType}
@@ -15,12 +15,13 @@ struct VideoLoader{HostType, MCPlanType}
     deviceMemory::Int64
 end
 
-function VideoLoader(nFrames, frameSize, nSegs, frameRanges, fileReader,
+function VideoLoader(nFrames, frameSize, segsPerVideo, frameRanges, fileReader,
                      hostMemory, deviceMemory, HostType)
     hostArrays = OrderedDict{Int64, Array{HostType, 3}}()
     deviceArrays = OrderedDict{Int64, CUDA.CuMatrix{Float32, CUDA.Mem.DeviceBuffer}}()
     motionCorrecter = MotionCorrecter(nFrames, frameSize)
-    VideoLoader(nFrames, frameSize, Int64(nSegs), frameRanges, fileReader,
+    nSegs = length(frameRanges)
+    VideoLoader(nFrames, frameSize, segsPerVideo, frameRanges, fileReader,
                 motionCorrecter, hostArrays,
                 deviceArrays, fill(false, nSegs),
                 Int64(hostMemory), Int64(deviceMemory))
@@ -28,10 +29,11 @@ end
 
 function Base.show(io::IO, vl::VideoLoader)
     compact = get(io, :compact, false)
+    nSegs = length(vl.frameRanges)
     println(io, "VideoLoader")
     println(io, "$(vl.nFrames) frames $(vl.frameSize)")
     println(io, "Host (RAM) type: $(hostType(vl)); Device (GPU) type: $(deviceType(vl))")
-    println(io, "Number of segs: $(vl.nSegs)")
+    println(io, "Number of segs: $(nSegs)")
     println(io, "Host segs: $(keys(vl.hostArrays))")
     println(io, "Device segs: $(keys(vl.deviceArrays))")
 end
@@ -68,28 +70,36 @@ function HDFLoader(fileName; key=nothing, hostMemory=1e10,
             f[key][:, :, frameRanges[seg_id]]
         end
     end
-    VideoLoader(nFrames, (w, h), n_segs, frameRanges, fileReader,
+    VideoLoader(nFrames, (w, h), [collect(1:n_segs)], frameRanges, fileReader,
                 hostMemory, deviceMemory, hostType)
 end
 
+function eachSegment(f::Function, vl::VideoLoader, segs; shift::Bool=false)
+    processed = zeros(Bool, length(segs))
+    @showprogress "Device segs" for i=eachindex(segs)
+        seg_id = segs[i]
+        if seg_id in keys(vl.deviceArrays)
+            f(seg_id, loadToDevice!(vl, seg_id, shift))
+            processed[i] = true
+        end
+    end
+    @showprogress "Host segs" for i=eachindex(segs)
+        seg_id = segs[i]
+        if !processed[i] && seg_id in keys(vl.hostArrays)
+            f(seg_id, loadToDevice!(vl, seg_id, shift))
+            processed[i] = true
+        end
+    end
+    @showprogress "Disk segs" for i=eachindex(segs)
+        seg_id = segs[i]
+        if !processed[i]
+            f(seg_id, loadToDevice!(vl, seg_id, shift))
+            processed[i] = true
+        end
+    end
+end
 function eachSegment(f::Function, vl::VideoLoader; shift::Bool=false)
-    processed = zeros(Bool, vl.nSegs)
-    @showprogress "Device segs" for seg_id in keys(vl.deviceArrays)
-        f(seg_id, loadToDevice!(vl, seg_id, shift))
-        processed[seg_id] = true
-    end
-    @showprogress "Host segs" for seg_id in keys(vl.hostArrays)
-        if !processed[seg_id]
-            f(seg_id, loadToDevice!(vl, seg_id, shift))
-            processed[seg_id] = true
-        end
-    end
-    @showprogress "Disk segs" for seg_id=1:vl.nSegs
-        if !processed[seg_id]
-            f(seg_id, loadToDevice!(vl, seg_id, shift))
-            processed[seg_id] = true
-        end
-    end
+    eachSegment(f, vl, 1:length(vl.frameRanges); shift)
 end
 
 hostType(vl::VideoLoader) = eltype(eltype(values(vl.hostArrays)))
@@ -146,10 +156,11 @@ function getFrameHost(vl::VideoLoader, frame_id::Int64)
 end
 
 n_frames(vl::VideoLoader) = vl.nFrames
+n_videos(vl::VideoLoader) = length(vl.segsPerVideo)
 
 function frame_to_seg(vl::VideoLoader, frame_id::Int64)
     #TODO: Could do a binary search here
-    for seg_id=1:vl.nSegs
+    for seg_id=eachindex(vl.frameRanges)
         if frame_id in vl.frameRanges[seg_id]
             return seg_id
         end
@@ -205,4 +216,19 @@ function rightMul(vl::VideoLoader, mats::Tuple)
         end
     end
     return res
+end
+
+function video_range(vl::VideoLoader, video_id::Int64)
+    frs = vl.frameRanges[vl.segsPerVideo[video_id]]
+    start = frs |> first |> first
+    stop = frs |> last |> last
+    return start:stop
+end
+
+function frame_to_video_id(vl::VideoLoader, frame_no::Int64)
+    for video_id=eachindex(vl.segsPerVideo)
+        if frame_no in video_range(vl, video_id)
+            return video_id
+        end
+    end
 end

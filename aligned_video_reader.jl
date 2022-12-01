@@ -5,6 +5,7 @@ end
 function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="",
                           hostMemory=1e10, deviceMemory=1e10, deviceType=Float32)
     alignment = DataFrames.DataFrame(CSV.File(alignmentFile))
+    n_videos = size(alignment, 1)
     keys = String[]
     n_frames_per_video = Int64[]
     eltypes = Type[]
@@ -24,7 +25,6 @@ function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="",
     height = alignment.bottom[1] - alignment.top[1] + 1
     nFrames = sum(n_frames_per_video)
     hostType = eltypes[1]
-    n_segs = segsPerFile*length(n_frames_per_video)
     localFrameRanges = UnitRange{Int64}[]
     frameRanges = UnitRange{Int64}[]
     cumlFrame = 0
@@ -37,7 +37,7 @@ function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="",
         end
         cumlFrame += N
     end
-
+    segsPerVideo = collect.([(i-1)*segsPerFile .+ (1:segsPerFile) for i=1:n_videos])
     function fileReader(seg_id)::Array{hostType, 3}
         video_id = div(seg_id-1, segsPerFile) + 1
         fileName = alignment.filename[video_id]
@@ -50,6 +50,6 @@ function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="",
             f[keys[video_id]][left:right, top:bottom, localFrameRanges[seg_id]] .+ F_offset
         end
     end
-    VideoLoader(nFrames, (width, height), n_segs, frameRanges, fileReader,
+    VideoLoader(nFrames, (width, height), segsPerVideo, frameRanges, fileReader,
                 hostMemory, deviceMemory, hostType)
 end

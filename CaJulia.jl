@@ -31,13 +31,13 @@ example_files_huge = ["recording_20211016_163921.hdf5",
 #                      deviceMemory=8e9, hostMemory=4.0e10);
 #hdfLoader = HDFLoader("../fake_videos/fake2.h5"; key="/images",
 #                      deviceMemory=8e9, hostMemory=4.0e10);
-hdfLoader = AlignedHDFLoader("../data/aligned_videos.csv", 5,
+hdfLoader = AlignedHDFLoader("../data/aligned_videos_first_6.csv", 5,
                              pathPrefix="../data/", hostMemory=4e10,
                              deviceMemory=1.2e10)
 gui = GUI.GUIState(hdfLoader);
 display(gui.fig)
 GUI.calcI!(gui);
-GUI.initA!(gui; median_wnd=5);
+GUI.initA!(gui; threshold=1e-2, median_wnd=5);
 GUI.initBackground!(gui);
 GUI.updateTraces!(gui);
 GUI.updateFootprints!(gui);
@@ -53,3 +53,12 @@ for seg_id = 1:20
     heatmap(reshape(Array(m), hdfLoader.frameSize...)',
             title="Seg $seg_id", aspect_ratio=1, clim=(150, 250)) |> display
 end
+
+sol = Sol(hdfLoader);
+sol.I = negentropy_img(hdfLoader);
+initA!(sol; threshold=5e-3, median_wnd=5);
+zeroTraces!(sol);
+initBackground!(hdfLoader, sol);
+updateTraces!(hdfLoader, sol, deconvFcn! = oasis_opt!);
+updateROIs!(hdfLoader, sol);
+merge!(sol, thres=.6) |> length

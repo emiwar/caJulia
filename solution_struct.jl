@@ -9,13 +9,14 @@ mutable struct Sol
     b0::CUDA.CuMatrix{Float32}
     b1::CUDA.CuVector{Float32}
     f1::CUDA.CuVector{Float32}
+    mean_frame::CUDA.CuMatrix{Float32}
     gammas::Vector{Float64}
     lambdas::Vector{Float64}
     frame_size::Tuple{Int64, Int64}
     colors::Vector{Colors.RGB{Colors.N0f8}}
 end
 
-function Sol(height, width, length)
+function Sol(height, width, length, nVideos=1)
     T = length
     M = width*height
     A = CUDA.cu(SparseArrays.spzeros(Float32, 0, M))
@@ -23,16 +24,17 @@ function Sol(height, width, length)
     C = CUDA.zeros(Float32, T, 0)
     S = CUDA.zeros(Float32, T, 0)
     I = CUDA.zeros(Float32, height, width)
-    b0 = CUDA.zeros(Float32, M, 1)
+    b0 = CUDA.zeros(Float32, M, nVideos)
     b1 = CUDA.zeros(Float32, M)
     f1 = CUDA.zeros(Float32, T)
+    mean_frame = CUDA.zeros(Float32, M, nVideos)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
     colors = Colors.RGB{Colors.N0f8}[]
-    Sol(A, R, C, S, I, b0, b1, f1, gammas, lambdas, (height, width), colors)
+    Sol(A, R, C, S, I, b0, b1, f1, mean_frame, gammas, lambdas, (height, width), colors)
 end
 
-Sol(vl::VideoLoader) = Sol(vl.frameSize..., vl.nFrames)
+Sol(vl::VideoLoader) = Sol(vl.frameSize..., vl.nFrames, n_videos(vl))
 
 
 function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
@@ -46,9 +48,9 @@ function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
     sol.colors = map(rand_color, 1:N)
 end
 
-function reconstruct_frame(sol::Sol, frame_id::Int64)
+function reconstruct_frame(sol::Sol, frame_id::Int64, video_id::Int64)
     f = (sol.C[frame_id, :]' * sol.A)'
-    f .+= view(sol.b0 ./ sqrt(size(sol.C, 1)), :)
+    f .+= view(sol.b0[:, video_id], :)
     f .+= @CUDA.allowscalar sol.b1 .* sol.f1[frame_id]
     return f
 end
