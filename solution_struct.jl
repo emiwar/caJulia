@@ -1,22 +1,19 @@
 import SparseArrays
 import CUDA
-mutable struct Sol
+mutable struct Sol{BackgroundsT <: Tuple}
     A::CUDA.CUSPARSE.CuSparseMatrixCSC{Float32, Int32}
     R::CUDA.CuMatrix{Float32}
     C::CUDA.CuMatrix{Float32}
     S::CUDA.CuMatrix{Float32}
     I::CUDA.CuMatrix{Float32}
-    b0::CUDA.CuMatrix{Float32}
-    b1::CUDA.CuVector{Float32}
-    f1::CUDA.CuVector{Float32}
-    mean_frame::CUDA.CuMatrix{Float32}
+    backgrounds::BackgroundsT
     gammas::Vector{Float64}
     lambdas::Vector{Float64}
     frame_size::Tuple{Int64, Int64}
     colors::Vector{Colors.RGB{Colors.N0f8}}
 end
 
-function Sol(height, width, length, nVideos=1)
+function Sol(height, width, length)
     T = length
     M = width*height
     A = CUDA.cu(SparseArrays.spzeros(Float32, 0, M))
@@ -24,18 +21,15 @@ function Sol(height, width, length, nVideos=1)
     C = CUDA.zeros(Float32, T, 0)
     S = CUDA.zeros(Float32, T, 0)
     I = CUDA.zeros(Float32, height, width)
-    b0 = CUDA.zeros(Float32, M, nVideos)
-    b1 = CUDA.zeros(Float32, M)
-    f1 = CUDA.zeros(Float32, T)
-    mean_frame = CUDA.zeros(Float32, M, nVideos)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
     colors = Colors.RGB{Colors.N0f8}[]
-    Sol(A, R, C, S, I, b0, b1, f1, mean_frame, gammas, lambdas, (height, width), colors)
+    backgrounds = (StaticBackground(height*width),)
+    Sol(A, R, C, S, I, backgrounds, gammas, lambdas, (height, width), colors)
 end
 
-Sol(vl::VideoLoader) = Sol(vl.frameSize..., vl.nFrames, n_videos(vl))
-
+Sol(vl::VideoLoader) = Sol(framesize(vl)..., nframes(vl))
+ncells(sol::Sol) = length(sol.colors)
 
 function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
     N = size(sol.A, 1)
@@ -48,10 +42,23 @@ function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
     sol.colors = map(rand_color, 1:N)
 end
 
-function reconstruct_frame(sol::Sol, frame_id::Int64, video_id::Int64)
+function reconstruct_frame(sol::Sol, frame_id, vl)
     f = (sol.C[frame_id, :]' * sol.A)'
-    f .+= view(sol.b0[:, video_id], :)
-    f .+= @CUDA.allowscalar sol.b1 .* sol.f1[frame_id]
+    for bg in sol.backgrounds
+        f .+= reconstruct_frame(bg, frame_id)
+    end
+    return f
+end
+
+function residual_frame(sol::Sol, frame_id, vl)
+    readframe(vl, frame_id) .- reconstruct_frame(sol, frame_id, vl)
+end
+
+function bg_subtracted_frame(sol::Sol, frame_id, vl)
+    f = readframe(vl, frame_id)
+    for bg in sol.backgrounds
+        f .-= reconstruct_frame(bg, frame_id)
+    end
     return f
 end
 

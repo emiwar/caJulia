@@ -6,8 +6,8 @@ import HDF5
 import Colors
 import GLMakie
 using ProgressMeter
-include("motion_correction.jl")
-include("videoLoader.jl")
+#include("motion_correction.jl")
+include("videoLoaders/videoLoaders.jl"); using .VideoLoaders
 include("solution_struct.jl")
 include("negentropy_img.jl")
 include("viz.jl")
@@ -15,8 +15,9 @@ include("initROIs.jl")
 include("fastHALS.jl")
 include("oasis_opt.jl")
 include("merge_split.jl")
+include("backgrounds.jl")
 include("gui_module.jl")
-include("aligned_video_reader.jl")
+#include("aligned_video_reader.jl")
 
 example_files = ["20211016_163921_animal1learnday1.nwb",
                  "20211017_154731_animal1learnday2.nwb",
@@ -27,14 +28,14 @@ example_files_mc = ["recording_20211016_163921-MC.h5",
                     "recording_20220919_135612-MC.h5"]
 example_files_huge = ["recording_20211016_163921.hdf5",
                       "recording_20220919_135612.hdf5"]
-#hdfLoader = HDFLoader("../data/"*example_files[1]; #key="/images",
-#                      deviceMemory=8e9, hostMemory=4.0e10);
-#hdfLoader = HDFLoader("../fake_videos/fake2.h5"; key="/images",
-#                      deviceMemory=8e9, hostMemory=4.0e10);
-hdfLoader = AlignedHDFLoader("../data/aligned_videos_first_6.csv", 5,
-                             pathPrefix="../data/", hostMemory=4e10,
-                             deviceMemory=1.2e10)
-gui = GUI.GUIState(hdfLoader);
+
+nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[1])
+splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
+hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=4e10)
+deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1e10)
+
+
+gui = GUI.GUIState(deviceCache);
 display(gui.fig)
 GUI.calcI!(gui);
 GUI.initA!(gui; threshold=1e-2, median_wnd=5);
@@ -44,21 +45,11 @@ GUI.updateFootprints!(gui);
 GUI.mergeCells!(gui);
 
 
-
-for seg_id = 1:20
-    seg = loadToDevice!(hdfLoader, seg_id)
-    S = sum(seg, dims=2)
-    N = length(hdfLoader.frameRanges[seg_id])
-    m = S ./ N
-    heatmap(reshape(Array(m), hdfLoader.frameSize...)',
-            title="Seg $seg_id", aspect_ratio=1, clim=(150, 250)) |> display
-end
-
-sol = Sol(hdfLoader);
-sol.I = negentropy_img(hdfLoader);
+sol = Sol(deviceCache);
+sol.I = negentropy_img(deviceCache);
 initA!(sol; threshold=5e-3, median_wnd=5);
 zeroTraces!(sol);
-initBackground!(hdfLoader, sol);
-updateTraces!(hdfLoader, sol, deconvFcn! = oasis_opt!);
-updateROIs!(hdfLoader, sol);
+#initBackground!(hdfLoader, sol);
+updateTraces!(deviceCache, sol)#, deconvFcn! = oasis_opt!);
+updateROIs!(deviceCache, sol);
 merge!(sol, thres=.6) |> length

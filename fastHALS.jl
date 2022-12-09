@@ -1,57 +1,77 @@
 function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!)
-    AY, b1Y = leftMul((sol.A, sol.b1'), vl);
-    A = sol.A;
-    C = sol.C;
-    f1 = sol.f1;
-    Ad = CUDA.CuArray(A)
-    AA = A*Ad';
-    Ab0 = similar(C);
-    b0b1 = similar(f1);
-    for video_id = 1:n_videos(vl)
-        r = video_range(vl, video_id)
-        Ab0[r, :] .= reshape(A*view(sol.b0, :, video_id), 1, size(C, 2))
-        b0b1[r] .= sol.b0[:, video_id]'*sol.b1
+    for bg in sol.backgrounds
+        prepbackgroundtraceupdate!(bg, sol, vl)
     end
-    Ab1 = A*sol.b1;
-    Ab1h = Array(Ab1);
-    @showprogress "Deconvolving" for j=1:size(C, 2)
-        sol.R[:, j] .= view(C, :, j) .+ view(AY, j, :) .- C*view(AA, j, :) .- 
-                    view(Ab0, :, j) .- Ab1h[j]*f1
+    AY = CUDA.zeros(ncells(sol), nframes(vl)) #similar(sol.C')
+    for i = optimalorder(vl)
+        Y_seg = readseg(vl, i)
+        AY[:, framerange(vl, i)] .= sol.A*Y_seg
+        for bg in sol.backgrounds
+            traceupdateseg!(bg, Y_seg, i, vl)
+        end
+    end
+    
+    Ad = CUDA.CuArray(sol.A)
+    AA = sol.A*Ad';
+    for bg in sol.backgrounds
+        updatetracecorrections!(bg, sol, vl)
+    end
+    @showprogress "Deconvolving" for j=1:ncells(sol)
+        sol.R[:, j] .= view(AY, j, :) .- sol.C*view(AA, j, :) .+ view(sol.C, :, j)
+        for bg in sol.backgrounds
+            sol.R[:, j] .-= tracecorrection(bg, j)
+        end
         deconvFcn!(sol, j)
     end
-    #sol.f1 .= view(b1Y, :) .- C*Ab1 .- b0b1
+    for bg in sol.backgrounds
+        traceupdate!(bg, sol, vl)
+    end
 end
 
 function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
-    YC, Yf1 = rightMul(vl, (sol.C, sol.f1))
-    C = sol.C
-    b0 = sol.b0
-    b1 = sol.b1
-    Ad = CUDA.CuArray(sol.A)
-    CC = C'*C
-    CCh = Array(CC)
-    
-    b0C = CUDA.zeros(size(Ad, 2), size(Ad, 1))
-    for video_id = 1:n_videos(vl)
-        b0C .+= reshape(view(b0, :, video_id), size(b0, 1), 1) *
-                    sum(view(C, video_range(vl, video_id), :), dims=1)
+    for bg in sol.backgrounds
+        prepupdate!(bg, sol, vl)
     end
-    f1Ch = Array(C'*sol.f1)
+    YC = CUDA.zeros(prod(framesize(vl)), ncells(sol))
+    for i = optimalorder(vl)
+        Y_seg = readseg(vl, i)
+        YC .+= Y_seg*sol.C[framerange(vl, i), :]
+        for bg in sol.backgrounds
+            updateseg!(bg, Y_seg, i, vl)
+        end
+    end
+    Ad = CUDA.CuArray(sol.A)
+    CC = sol.C'*sol.C
+    CCh = Array(CC)
+    for bg in sol.backgrounds
+        updatepixelcorrections!(bg, sol, vl)
+    end
+    #b0C = CUDA.zeros(size(Ad, 2), size(Ad, 1))
+    #for video_id = 1:n_videos(vl)
+    #    b0C .+= reshape(view(b0, :, video_id), size(b0, 1), 1) *
+    #                sum(view(C, video_range(vl, video_id), :), dims=1)
+    #end
+    #f1Ch = Array(C'*sol.f1)
     
     Amask = maskA(Ad, sol.frame_size; growth=roi_growth)
     @showprogress "Updating footprints" for j=1:size(sol.A, 1)
-        Ad[j, :] .= max.(view(Ad, j, :).*CCh[j,j] .+ view(YC, :, j)
-                      .- view((view(CC, j:j, :)*Ad), :)
-                      .- view(b0C, :, j)
-                      .- view(b1, :)*f1Ch[j], 0) .* view(Amask, j, :)
+        Ad[j, :] .= view(YC, :, j) .- view((view(CC, j:j, :)*Ad), :) .+
+                    view(Ad, j, :).*CCh[j,j]
+        for bg in sol.backgrounds
+            Ad[j, :] .-= pixelcorrections(bg, j)
+        end
+        Ad[j, :] .= max.(view(Ad, j, :), 0) .* view(Amask, j, :)
         Ad[j, :] ./= CUDA.norm(Ad[j, :]) .+ 1.0f-10
     end
-    for video_id = 1:n_videos(vl)
-        r = video_range(vl, video_id)
-        f0C = sum(view(C, r, :), dims=1) ./ length(r)
-        f1f0 = sum(view(sol.f1, r, :))
-        sol.b0[:, video_id] .= view(sol.mean_frame, :, video_id) .- view(sol.A'*f0C', :) .- f1f0*b1
+    for bg in sol.backgrounds
+        update!(bg, sol, vl)
     end
+    #for video_id = 1:n_videos(vl)
+    #    r = video_range(vl, video_id)
+    #    f0C = sum(view(C, r, :), dims=1) ./ length(r)
+    #    f1f0 = sum(view(sol.f1, r, :))
+    #    sol.b0[:, video_id] .= view(sol.mean_frame, :, video_id) .- view(sol.A'*f0C', :) .- f1f0*b1
+    #end
     #sol.b0 = max.(sol.b0, 0.0f0)
     #sol.b1 .= view(Yf1 .- (f0C*Ad)' .- f1f0*b0, :)
     #sol.b1 ./= CUDA.norm(b1) .+ 1.0f-10
@@ -77,7 +97,6 @@ function maskA(Ad, frame_size; growth=1)
     # CUDA.CuArray(CUDA.CUSPARSE.CuSparseMatrixCSR)
 end
 
-
 function initBackground!(vl::VideoLoader, sol::Sol)
     sol.mean_frame .= 0.0
     for i=1:n_videos(vl)
@@ -94,3 +113,14 @@ function initBackground!(vl::VideoLoader, sol::Sol)
     sol.f1 .= 0.0f0
 end
 
+function initBackgrounds!(vl::VideoLoader, sol::Sol)
+    for bg in sol.backgrounds
+        prepinit!(bg, sol, vl)
+    end
+    for i=optimalorder(vl)
+        seg = readseg(vl, i)
+        for bg in sol.backgrounds
+            initseg!(bg, seg, i, vl)
+        end
+    end
+end

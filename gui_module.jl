@@ -4,18 +4,18 @@ using GLMakie
 struct GUIState
     fig::Figure
     sol::Observable{Main.Sol}
-    vid::Observable{Main.VideoLoader}
+    vid::Observable{Main.VideoLoaders.VideoLoader}
     timeSlider::Slider
     playing::Observable{Bool}
     selectedNeuron::Observable{Int64}
 end
 
-function GUIState(vl::Main.VideoLoader)
+function GUIState(vl::Main.VideoLoaders.VideoLoader)
     fig = Figure()
     vid = Observable(vl)
     sol = lift(v->Main.Sol(v), vid)
     fig[3, 1] = playerControls = GridLayout()
-    nFrames = lift(Main.n_frames, vid)
+    nFrames = lift(Main.nframes, vid)
     timeSlider = SliderGrid(playerControls[1, 1],
                             (label="Frame", format="{:d}",
                             range=@lift(1:$nFrames),
@@ -46,7 +46,7 @@ function setupImages(guiState::GUIState)
 
     guiState.fig[1, 1] = topRow = GridLayout()
 
-    current_frame = lift(Main.getFrameHost, guiState.vid, currentTime(guiState))
+    current_frame = lift((vl, t)->Main.readframe(vl.source_loader, t), guiState.vid, currentTime(guiState))
     Y_extrema = Observable((0, 500))#lift(Main.extrema, guiState.vid)
     contrast_range = lift((ex)->LinRange(ex[1], ex[2], 200), Y_extrema)
     contrast_slider = IntervalSlider(topRow[2, 1],
@@ -57,21 +57,29 @@ function setupImages(guiState::GUIState)
     ax1.aspect = DataAspect()
 
     second_video_menu = GLMakie.Menu(topRow[1, 2], options=[:reconstructed,
-                                                            :motion_corrected])
+                                                            :residual,
+                                                            :background_subtracted])
     current_mc_frame = lift(guiState.vid,
                             guiState.sol,
                             currentTime(guiState),
                             second_video_menu.selection) do vl, sol, t, sel
-        seg_id = Main.frame_to_seg(vl, t)
-        frame_id = t - (first(vl.frameRanges[seg_id]) - 1)
-        video_id = Main.frame_to_video_id(vl, frame_id)
-        if sel==:motion_corrected
-            seg = Main.loadToDevice!(vl, seg_id, true)     
-            reshape(Array(seg[:, frame_id]), vl.frameSize...)
-        elseif sel==:reconstructed
-            reshape(Array(Main.reconstruct_frame(sol, frame_id, video_id)), vl.frameSize...)
+        seg_id = Main.VideoLoaders.frame2seg(vl, t)
+        frame_id = t - (first(Main.framerange(vl, seg_id)) - 1)
+        #video_id = Main.seg2video(vl, frame_id)
+        #if sel==:motion_corrected
+        #    seg = Main.loadToDevice!(vl, seg_id, true)     
+        #    reshape(Array(seg[:, frame_id]), vl.frameSize...)
+        if sel==:reconstructed
+            reshape(Array(Main.reconstruct_frame(sol, frame_id, vl)),
+                    Main.framesize(vl)...)
+        elseif sel==:residual
+            reshape(Array(Main.residual_frame(sol, frame_id, vl)),
+                    Main.framesize(vl)...)
+        elseif sel==:background_subtracted
+            reshape(Array(Main.bg_subtracted_frame(sol, frame_id, vl)),
+                    Main.framesize(vl)...)
         else
-            zeros(Float32, vl.frameSize...)
+            zeros(Float32, Main.framesize(vl)...)
         end
     end
     contrast_slider_mc = IntervalSlider(topRow[2, 2],
@@ -168,7 +176,7 @@ end
 
 function stepTime!(guiState::GUIState, time_diff)
     t = currentTime(guiState)[]
-    nf = Main.n_frames(guiState.vid[])
+    nf = Main.nframes(guiState.vid[])
     new_time = (t - 1 + time_diff + nf)%nf + 1
     setTime!(guiState, new_time)
 end
@@ -186,7 +194,7 @@ function initA!(guiState::GUIState; kwargs...)
 end
 
 function initBackground!(guiState::GUIState)
-    Main.initBackground!(guiState.vid[], guiState.sol[])
+    Main.initBackgrounds!(guiState.vid[], guiState.sol[])
     guiState.sol[] = guiState.sol[]
 end
 
