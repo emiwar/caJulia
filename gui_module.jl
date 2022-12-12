@@ -63,8 +63,9 @@ function setupImages(guiState::GUIState)
                             guiState.sol,
                             currentTime(guiState),
                             second_video_menu.selection) do vl, sol, t, sel
-        seg_id = Main.VideoLoaders.frame2seg(vl, t)
-        frame_id = t - (first(Main.framerange(vl, seg_id)) - 1)
+        #seg_id = Main.VideoLoaders.frame2seg(vl, t)
+        #frame_id = t - (first(Main.framerange(vl, seg_id)) - 1)
+        frame_id = t
         #video_id = Main.seg2video(vl, frame_id)
         #if sel==:motion_corrected
         #    seg = Main.loadToDevice!(vl, seg_id, true)     
@@ -182,7 +183,7 @@ function stepTime!(guiState::GUIState, time_diff)
 end
 
 function calcI!(guiState::GUIState)
-    I = Main.negentropy_img(guiState.vid[])
+    I = Main.negentropy_img_per_video(guiState.vid[])
     guiState.sol[].I = I
     guiState.sol[] = guiState.sol[]
 end

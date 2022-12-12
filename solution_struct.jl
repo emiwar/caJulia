@@ -13,8 +13,9 @@ mutable struct Sol{BackgroundsT <: Tuple}
     colors::Vector{Colors.RGB{Colors.N0f8}}
 end
 
-function Sol(height, width, length)
-    T = length
+function Sol(vl::VideoLoader)
+    T = nframes(vl)
+    height, width = framesize(vl)
     M = width*height
     A = CUDA.cu(SparseArrays.spzeros(Float32, 0, M))
     R = CUDA.zeros(Float32, T, 0)
@@ -24,11 +25,10 @@ function Sol(height, width, length)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
     colors = Colors.RGB{Colors.N0f8}[]
-    backgrounds = (StaticBackground(height*width),)
+    backgrounds = (PerVideoBackground(vl), PerVideoRank1Background(vl))
     Sol(A, R, C, S, I, backgrounds, gammas, lambdas, (height, width), colors)
 end
 
-Sol(vl::VideoLoader) = Sol(framesize(vl)..., nframes(vl))
 ncells(sol::Sol) = length(sol.colors)
 
 function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
@@ -45,7 +45,7 @@ end
 function reconstruct_frame(sol::Sol, frame_id, vl)
     f = (sol.C[frame_id, :]' * sol.A)'
     for bg in sol.backgrounds
-        f .+= reconstruct_frame(bg, frame_id)
+        f .+= reconstruct_frame(bg, frame_id, vl)
     end
     return f
 end
@@ -57,7 +57,7 @@ end
 function bg_subtracted_frame(sol::Sol, frame_id, vl)
     f = readframe(vl, frame_id)
     for bg in sol.backgrounds
-        f .-= reconstruct_frame(bg, frame_id)
+        f .-= reconstruct_frame(bg, frame_id, vl)
     end
     return f
 end

@@ -32,3 +32,23 @@ function negentropy_approx_no_mean(Y)
     @. (y3^2 / y2^3)/12.0 + y4/(y2^2) / 48.0
 end
 
+function negentropy_img_per_video(vl::VideoLoader)
+    nvids = nvideos(vl)
+    npixels = prod(framesize(vl))
+    pows = CUDA.fill((0.0, 0.0, 0.0, 0.0), npixels, nvids)
+    for i=optimalorder(vl)
+        seg = readseg(vl, i)
+        vid_i = video_idx(vl, i)
+        op = .+
+        pows[:, vid_i] .= view(op.(view(pows, :, vid_i),
+                              CUDA.mapreduce(y->(y, y^2, y^3, y^4), .+, seg;
+                                            init=(0.0, 0.0, 0.0, 0.0), dims=2)), :)
+    end
+    negentropy_img = CUDA.zeros(npixels, 1)
+    for vid_i = 1:nvideos(vl)
+        T = length(framerange_video(vl, vid_i))
+        negentropy_img .+= map(yp->negentropy_approx((yp ./ T)...),
+                               view(pows, :, vid_i)) ./ nvids
+    end
+    return negentropy_img
+end

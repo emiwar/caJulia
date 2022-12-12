@@ -3,7 +3,7 @@ function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!)
         prepbackgroundtraceupdate!(bg, sol, vl)
     end
     AY = CUDA.zeros(ncells(sol), nframes(vl)) #similar(sol.C')
-    for i = optimalorder(vl)
+    @showprogress "Calculating traces" for i = optimalorder(vl)
         Y_seg = readseg(vl, i)
         AY[:, framerange(vl, i)] .= sol.A*Y_seg
         for bg in sol.backgrounds
@@ -33,7 +33,7 @@ function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
         prepupdate!(bg, sol, vl)
     end
     YC = CUDA.zeros(prod(framesize(vl)), ncells(sol))
-    for i = optimalorder(vl)
+    @showprogress "Calculating footprints" for i = optimalorder(vl)
         Y_seg = readseg(vl, i)
         YC .+= Y_seg*sol.C[framerange(vl, i), :]
         for bg in sol.backgrounds

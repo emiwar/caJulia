@@ -1,14 +1,3 @@
-abstract type Background end
-
-prepupdate!(bg::Background, sol, vl) = nothing
-updateseg!(bg::Background, sol, vl) = nothing
-update!(bg::Background, sol, vl) = nothing
-updateseg!(bg::Background, seg, seg_id, vl) = nothing
-
-prepbackgroundtraceupdate!(bg::Background, sol, vl) = nothing
-traceupdate!(bg::Background, sol, vl) = nothing
-traceupdateseg!(bg::Background, seg, i, vl) = nothing
-
 mutable struct StaticBackground <: Background
     m::CUDA.CuVector{Float32}
     b::CUDA.CuVector{Float32}
@@ -54,6 +43,6 @@ function update!(bg::StaticBackground, sol, vl)
     bg.b .= bg.m .- view(sol.A'*sum(sol.C; dims=1)' ./ nframes(vl), :)
 end
 
-function reconstruct_frame(bg::StaticBackground, frame_id)
+function reconstruct_frame(bg::StaticBackground, frame_id, vl)
     return bg.b
 end
