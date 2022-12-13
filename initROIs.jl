@@ -153,3 +153,64 @@ function initROIs_alt(video, frame_size; min_size=50)
     println("$seg_id, $(length(rois_list)), $(length(sorted_pixels))")
     rois_list
 end
+
+
+
+function getparent(parents, i)
+    if i == 0
+        return 0
+    elseif parents[i] == i
+        return i
+    else
+        return getparent(parents, parents[i])
+    end
+end
+
+function segment_peaks_unionfind(I, min_size, threshold)
+    segmentation = zeros(Int64, size(I))
+    sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
+    parents = Int64[]
+    sizes = Int64[]
+    for coord in sorted_pixels
+        if I[coord] < threshold
+            break
+        end
+        neighbours = Int64[]
+        for offs in [(0,1), (0,-1), (1,0), (-1,0)]
+            offs_coord = coord + CartesianIndex(offs...)
+            if checkbounds(Bool, I, offs_coord) && segmentation[offs_coord] != 0
+                push!(neighbours, segmentation[offs_coord])
+            end
+        end
+        if length(neighbours) == 0
+            push!(parents, length(parents)+1)
+            push!(sizes, 1)
+            segmentation[coord] = length(parents)
+        elseif length(neighbours) == 1
+            p = getparent(parents, neighbours[1])
+            segmentation[coord] = p
+            sizes[p] += 1
+        else
+            p_sizes = [sizes[getparent(parents, n)] for n in neighbours]
+            largest_i = findmax(p_sizes)[2]
+            largest_p = getparent(parents, neighbours[largest_i])
+            segmentation[coord] = largest_p
+            sizes[largest_p] += 1
+            for n in neighbours
+                p = getparent(parents, n)
+                if sizes[p] < min_size && p != largest_p
+                    parents[p] = largest_p
+                    sizes[largest_p] += sizes[p]
+                end
+            end
+        end
+    end
+    return map(segmentation) do i
+        p = getparent(parents, i)
+        if p==0 || sizes[p] < min_size
+            return 0
+        else
+            return p
+        end
+    end
+end
