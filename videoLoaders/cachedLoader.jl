@@ -35,6 +35,9 @@ nsegs(vl::CachedLoader) = nsegs(vl.source_loader)
 nframes(vl::CachedLoader) = nframes(vl.source_loader)
 framesize(vl::CachedLoader) = framesize(vl.source_loader)
 framerange(vl::CachedLoader, i) = framerange(vl.source_loader, i) 
+framerange_video(vl::CachedLoader, i) = framerange_video(vl.source_loader, i) 
+nvideos(vl::CachedLoader) = nvideos(vl.source_loader)
+video_idx(vl::CachedLoader, i) = video_idx(vl.source_loader, i) 
 
 used_memory(vl::CachedLoader) = sum(sizeof.(values(vl.cache)))
 
@@ -78,4 +81,8 @@ end
 
 function optimalorder(vl::CachedLoader)
     union(OrderedSet(keys(vl.cache)), optimalorder(vl.source_loader))
+end
+
+function filename(vl::CachedLoader, i::Integer)
+    filename(vl.source_loader, i)
 end

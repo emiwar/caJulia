@@ -30,6 +30,7 @@ framesize(vl::SplitLoader) = framesize(first(vl.sources))
 optimalorder(vl::SplitLoader) = 1:nsegs(vl)
 framerange(vl::SplitLoader, i::Int64) = vl.frame_ranges[i]
 readseg(vl::SplitLoader, i::Int64) = readseg(vl.sources[i])
+filename(vl::SplitLoader, i::Int64) = filename(vl.sources[i])
 function frame2seg(vl::SegmentLoader, frame_idx)
     for i=1:nsegs(vl)
         if frame_idx in framerange(vl, i)

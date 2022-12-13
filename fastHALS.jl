@@ -117,7 +117,7 @@ function initBackgrounds!(vl::VideoLoader, sol::Sol)
     for bg in sol.backgrounds
         prepinit!(bg, sol, vl)
     end
-    for i=optimalorder(vl)
+    @showprogress "Initializing backgrounds" for i=optimalorder(vl)
         seg = readseg(vl, i)
         for bg in sol.backgrounds
             initseg!(bg, seg, i, vl)

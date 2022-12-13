@@ -17,6 +17,7 @@ include("oasis_opt.jl")
 include("merge_split.jl")
 include("backgrounds/backgrounds.jl")
 include("gui_module.jl")
+include("save_result.jl")
 #include("aligned_video_reader.jl")
 
 example_files = ["20211016_163921_animal1learnday1.nwb",
@@ -33,10 +34,10 @@ example_files_huge = ["recording_20211016_163921.hdf5",
 
 #nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[6])
 #splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
-alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_first_3.csv", 5;
+alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_good.csv", 5;
                                  pathPrefix = "../data/")
-hostCache = VideoLoaders.CachedHostLoader(alignedLoader; max_memory=4e10)
-deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1e10)
+hostCache = VideoLoaders.CachedHostLoader(alignedLoader; max_memory=4.5e10)
+deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.5e10)
 
 
 gui = GUI.GUIState(deviceCache);

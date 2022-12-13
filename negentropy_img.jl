@@ -36,7 +36,7 @@ function negentropy_img_per_video(vl::VideoLoader)
     nvids = nvideos(vl)
     npixels = prod(framesize(vl))
     pows = CUDA.fill((0.0, 0.0, 0.0, 0.0), npixels, nvids)
-    for i=optimalorder(vl)
+    @showprogress "Calculating moments" for i=optimalorder(vl)
         seg = readseg(vl, i)
         vid_i = video_idx(vl, i)
         op = .+
@@ -45,7 +45,7 @@ function negentropy_img_per_video(vl::VideoLoader)
                                             init=(0.0, 0.0, 0.0, 0.0), dims=2)), :)
     end
     negentropy_img = CUDA.zeros(npixels, 1)
-    for vid_i = 1:nvideos(vl)
+    @showprogress "Calculating negentropy" for vid_i = 1:nvideos(vl)
         T = length(framerange_video(vl, vid_i))
         negentropy_img .+= map(yp->negentropy_approx((yp ./ T)...),
                                view(pows, :, vid_i)) ./ nvids

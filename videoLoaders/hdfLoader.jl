@@ -60,6 +60,16 @@ nframes(vl::MultiVideoLoader) = sum(nframes.(vl.sources))
 nsegs(vl::MultiVideoLoader) = sum(length.(vl.segs_per_video))
 nvideos(vl::MultiVideoLoader) = length(vl.segs_per_video)
 optimalorder(vl::MultiVideoLoader) = union((vl.segs_per_video)...)
+function framerange_video(vl::MultiVideoLoader, video_id)
+    sum(nframes.(view(vl.sources, 1:(video_id-1)))) .+ 
+        (1:nframes(vl.sources[video_id]))
+end
+function framerange(vl::MultiVideoLoader, i::Integer)
+    video_i = video_idx(vl, i)
+    local_idx = i - first(vl.segs_per_video[video_i]) + 1
+    sum(nframes.(view(vl.sources, 1:(video_i-1)))) .+
+        framerange(vl.sources[video_i], local_idx)
+end
 
 function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="")
     alignment = DataFrames.DataFrame(CSV.File(alignmentFile))
@@ -74,11 +84,16 @@ function AlignedHDFLoader(alignmentFile, segsPerFile; pathPrefix="")
 end
 
 video_idx(vl::MultiVideoLoader, seg_idx) = findfirst(s->(seg_idx in s),
-                                                     vl.segs_per_video)
-
+                                                     vl.segs_per_video) 
 function readseg(vl::MultiVideoLoader, i::Integer)
     video_i = video_idx(vl, i)
     local_idx = i - first(vl.segs_per_video[video_i]) + 1
     readseg(vl.sources[video_i], local_idx)
+end
+
+function filename(vl::MultiVideoLoader, i::Integer)
+    video_i = video_idx(vl, i)
+    local_idx = i - first(vl.segs_per_video[video_i]) + 1
+    filename(vl.sources[video_i], local_idx)
 end
 

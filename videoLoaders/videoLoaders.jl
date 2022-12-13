@@ -1,6 +1,6 @@
 module VideoLoaders
 
-export VideoLoader, readseg, readframe, optimalorder, nframes, nsegs, nvideos, framesize, video_idx, framerange
+export VideoLoader, readseg, readframe, optimalorder, nframes, nsegs, nvideos, framesize, video_idx, framerange, framerange_video, frame2seg
 
 using OrderedCollections, CUDA, HDF5, DataFrames, CSV
 
