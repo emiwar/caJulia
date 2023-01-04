@@ -10,10 +10,14 @@ struct GUIState
     selectedNeuron::Observable{Int64}
 end
 
-function GUIState(vl::Main.VideoLoaders.VideoLoader)
+function GUIState(vl::Main.VideoLoaders.VideoLoader, solution=nothing)
     fig = Figure()
     vid = Observable(vl)
-    sol = lift(v->Main.Sol(v), vid)
+    if solution === nothing
+        sol = lift(v->Main.Sol(v), vid)
+    else
+        sol = Observable(solution)
+    end
     fig[3, 1] = playerControls = GridLayout()
     nFrames = lift(Main.nframes, vid)
     timeSlider = SliderGrid(playerControls[1, 1],

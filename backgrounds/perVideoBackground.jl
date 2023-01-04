@@ -62,14 +62,6 @@ function update!(bg::PerVideoBackground, sol, vl)
     end
 end
 
-function pixelcorrection!(bg::PerVideoBackground, other_bg::PerVideoRank1Background, vl)
-    for video_id = 1:nvideos(vl)
-        fr = framerange_video(vl, video_id)
-        bg.b[:, video_id] .-= view(other_bg.b, :, video_id) .* sum(view(other_bg.f, fr)) ./ length(fr)
-    end
-end
-
-
 function reconstruct_frame(bg::PerVideoBackground, frame_id, vl)
     seg_id = frame2seg(vl, frame_id)
     video_id = video_idx(vl, seg_id)

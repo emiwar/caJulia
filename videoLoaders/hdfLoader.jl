@@ -17,6 +17,8 @@ Base.eltype(::Type{HDFLoader{T}}) where T = T
 nframes(vl::HDFLoader) = length(vl.subset[3])
 framesize(vl::HDFLoader) = (length(vl.subset[1]), length(vl.subset[2]))
 filename(vl::HDFLoader) = vl.filename
+nvideos(vl::HDFLoader) = 1
+video_idx(vl::HDFLoader) = 1
 
 function NWBLoader(filename, subset=nothing)
     fid = HDF5.h5open(filename, "r")

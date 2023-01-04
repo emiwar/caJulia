@@ -28,8 +28,8 @@ function Base.show(io::IO, vl::CachedLoader)
     println(io, "Used memory: $(used_memory(vl)) of $(vl.max_memory) ($(percent_memory)%)")
 end
 
-location(::CachedHostLoader) = "host"
-location(::CachedDeviceLoader) = "device"
+location(::CachedHostLoader) = :host
+location(::CachedDeviceLoader) = :device
 Base.eltype(vl::CachedLoader) = Base.eltype(Base.eltype(values(vl.cache)))
 nsegs(vl::CachedLoader) = nsegs(vl.source_loader)
 nframes(vl::CachedLoader) = nframes(vl.source_loader)
@@ -49,6 +49,7 @@ function convertseg(vl::CachedDeviceLoader, seg::AbstractArray)
     moved = CUDA.cu(seg)
     return eltype(vl).(moved)
 end
+convertseg(vl::CachedDeviceLoader, seg::CUDA.CuMatrix{Float32}) = seg
 
 function readseg(vl::CachedLoader, i::Int64)
     if i in keys(vl.cache)

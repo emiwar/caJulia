@@ -27,34 +27,45 @@ example_files = ["20211016_163921_animal1learnday1.nwb",
                  "20211020_150705_animal1learnday5.nwb",
                  "20211021_172832_animal1learnday6.nwb",
                  "20211101_171346_animal1reversalday15.nwb"]
-example_files_mc = ["recording_20211016_163921-MC.h5",
-                    "recording_20220919_135612-MC.h5"]
 example_files_huge = ["recording_20211016_163921.hdf5",
                       "recording_20220919_135612.hdf5"]
-
-#nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[6])
-#splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
-alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_good.csv", 5;
+#folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1"
+#folder *= "/1st batch oct 2021/Oprm1_cal_im_gCamp8_1221_dataanalysis/exported videos/"
+#nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files_huge[1], "images")
+#splitLoader = VideoLoaders.SplitLoader(nwbLoader, 20)
+alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_animal3.csv", 10;
                                  pathPrefix = "../data/")
-hostCache = VideoLoaders.CachedHostLoader(alignedLoader; max_memory=4.5e10)
-deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.5e10)
+hostCache = VideoLoaders.CachedHostLoader(alignedLoader; max_memory=3.2e10)
+#minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
+#VideoLoaders.calcmin!(minSubtr);
+deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.0e10)
 
 
 gui = GUI.GUIState(deviceCache);
 display(gui.fig)
 GUI.calcI!(gui);
+
 GUI.initA!(gui; threshold=3e-3, median_wnd=5);
+println("Done initing A ($(ncells(gui.sol[])) cells found.)")
 GUI.initBackground!(gui);
 GUI.updateTraces!(gui);
 GUI.updateFootprints!(gui);
 GUI.mergeCells!(gui);
 
-
 #sol = Sol(deviceCache);
 #sol.I = negentropy_img(deviceCache);
-#initA!(sol; threshold=1e-3, median_wnd=5);
-#zeroTraces!(sol);
-#initBackground!(hdfLoader, sol);
-#updateTraces!(deviceCache, sol)#, deconvFcn! = oasis_opt!);
-#updateROIs!(deviceCache, sol);
-#merge!(sol, thres=.6) |> length
+sol = gui.sol[];
+initA!(sol; threshold=3e-3, median_wnd=5);
+zeroTraces!(sol);
+initBackgrounds!(deviceCache, sol);
+updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!);
+
+for it = 3:6
+    updateROIs!(deviceCache, sol);
+    for i=1:3
+        merge!(sol, thres=.6)
+        println(ncells(sol))
+    end
+    updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!);
+    to_hdf("animal3_it$(it).h5", sol, deviceCache)
+end

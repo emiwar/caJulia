@@ -2,6 +2,7 @@ abstract type Background end
 include("staticBackground.jl")
 include("perVideoBackground.jl")
 include("perVideoRank1Background.jl")
+include("interactions.jl")
 
 prepupdate!(bg::Background, sol, vl) = nothing
 updateseg!(bg::Background, sol, vl) = nothing

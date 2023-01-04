@@ -31,6 +31,14 @@ optimalorder(vl::SplitLoader) = 1:nsegs(vl)
 framerange(vl::SplitLoader, i::Int64) = vl.frame_ranges[i]
 readseg(vl::SplitLoader, i::Int64) = readseg(vl.sources[i])
 filename(vl::SplitLoader, i::Int64) = filename(vl.sources[i])
+nvideos(vl::SplitLoader) = length(unique(filename.(vl.sources)))
+video_idx(vl::SplitLoader, i::Int64) = video_idx(vl.sources[i])
+
+function framerange_video(vl::SplitLoader, video_i)
+    frs = [vl.frame_ranges[i] for i=1:nsegs(vl) if video_idx(vl, i) == video_i]
+    minimum(first.(frs)):maximum(last.(frs))
+end
+
 function frame2seg(vl::SegmentLoader, frame_idx)
     for i=1:nsegs(vl)
         if frame_idx in framerange(vl, i)
