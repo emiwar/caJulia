@@ -1,50 +1,62 @@
-include("negentropy_img.jl")
-function initROIs(video, frame_size; threshold=5.0, median_wnd=5)
-    N = size(video, 2)
-    m = sum(video, dims=2) ./ N
-    m2 = mapreduce(x->Float64(x)^2, +, video; dims=2) ./ N
+import Images
+
+function initA!(sol::Sol; threshold=2e-2, median_wnd=1)
+    projection = reshape(Array(sol.I), sol.frame_size...) 
+    if median_wnd > 1
+        projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
+    end
+    rois_list = segment_peaks(projection, threshold)
+    rois = SparseArrays.sparse(hcat(rois_list...)')
+    sol.A = CUDA.cu(rois)
+end
+
+function initA_PNR!(Y, sol::Sol; threshold=5.0, median_wnd=5)
+    N = size(Y, 2)
+    m = sum(Y, dims=2) ./ N
+    m2 = mapreduce(x->Float64(x)^2, +, Y; dims=2) ./ N
     sd = sqrt.(m2 .- m.^2)
-    max_proj = maximum(video; dims=2)
-    projection = reshape(Array((max_proj .- m) ./ sd), frame_size...) 
+    max_proj = maximum(Y; dims=2)
+    projection = reshape(Array((max_proj .- m) ./ sd), sol.frame_size...) 
     rois_list = segment_peaks(projection, threshold, median_wnd)
     rois = SparseArrays.sparse(hcat(rois_list...)')
-    return CUDA.cu(rois)
+    sol.A = CUDA.cu(rois)
 end
 
-function initROIs_negentropy(Y, frame_size; threshold=5e-3, median_wnd=5)
-    projection = reshape(Array(negentropy_img(Y)), frame_size...)
+function initA_negentropy!(Y, sol::Sol; threshold=5e-3, median_wnd=5)
+    projection = reshape(Array(negentropy_img(Y)), sol.frame_size...)
     rois_list = segment_peaks_alt(projection, 0.5)
     rois = SparseArrays.sparse(hcat(rois_list...)')
-    return CUDA.cu(rois)
+    sol.A = CUDA.cu(rois)
 end
 
-function segment_peaks(projection, threshold, median_wnd)
-    filtered = Images.mapwindow(Statistics.median, projection[:,:,1], (median_wnd, median_wnd))
-    segmentation = zeros(Int64, size(projection))
-    sorted_pixels = CartesianIndices(filtered)[sortperm(filtered[:]; rev=true)]
+function segment_peaks(I, threshold)#, median_wnd)
+    #filtered = Images.mapwindow(Statistics.median, projection[:,:,1], (median_wnd, median_wnd))
+    segmentation = zeros(Int64, size(I))
+    sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
     lin_inds = LinearIndices(segmentation)
     seg_id = 0
     q = CartesianIndex{2}[]
     rois_list = SparseArrays.SparseVector{Float32, Int32}[]
     for start_coord in sorted_pixels
         if segmentation[start_coord] == 0 &&
-            filtered[start_coord] > threshold
+            I[start_coord] > threshold
             seg_id += 1
             segmentation[start_coord] = seg_id
             push!(q, start_coord)
             push!(rois_list, SparseArrays.spzeros(Float32, length(segmentation)))
-            rois_list[seg_id][lin_inds[start_coord]] = projection[start_coord]
+            rois_list[seg_id][lin_inds[start_coord]] = I[start_coord]
             while !isempty(q)
                 coord = popfirst!(q)
                 for offs in [(0,1), (0,-1), (1,0), (-1,0)]
                     offs_coord = coord + CartesianIndex(offs...)
-                    if checkbounds(Bool, projection, offs_coord) &&
+                    if checkbounds(Bool, I, offs_coord) &&
                        segmentation[offs_coord] == 0 &&
-                       filtered[coord] > filtered[offs_coord]
+                       I[coord] > I[offs_coord] &&
+                       I[offs_coord] > 0
                             segmentation[offs_coord] = seg_id
                             push!(q, offs_coord)
                             linear_index = lin_inds[offs_coord]
-                            rois_list[seg_id][linear_index] = projection[offs_coord]
+                            rois_list[seg_id][linear_index] = I[offs_coord]
                     end
                 end
             end
@@ -140,4 +152,65 @@ function initROIs_alt(video, frame_size; min_size=50)
     end
     println("$seg_id, $(length(rois_list)), $(length(sorted_pixels))")
     rois_list
+end
+
+
+
+function getparent(parents, i)
+    if i == 0
+        return 0
+    elseif parents[i] == i
+        return i
+    else
+        return getparent(parents, parents[i])
+    end
+end
+
+function segment_peaks_unionfind(I, min_size, threshold)
+    segmentation = zeros(Int64, size(I))
+    sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
+    parents = Int64[]
+    sizes = Int64[]
+    for coord in sorted_pixels
+        if I[coord] < threshold
+            break
+        end
+        neighbours = Int64[]
+        for offs in [(0,1), (0,-1), (1,0), (-1,0)]
+            offs_coord = coord + CartesianIndex(offs...)
+            if checkbounds(Bool, I, offs_coord) && segmentation[offs_coord] != 0
+                push!(neighbours, segmentation[offs_coord])
+            end
+        end
+        if length(neighbours) == 0
+            push!(parents, length(parents)+1)
+            push!(sizes, 1)
+            segmentation[coord] = length(parents)
+        elseif length(neighbours) == 1
+            p = getparent(parents, neighbours[1])
+            segmentation[coord] = p
+            sizes[p] += 1
+        else
+            p_sizes = [sizes[getparent(parents, n)] for n in neighbours]
+            largest_i = findmax(p_sizes)[2]
+            largest_p = getparent(parents, neighbours[largest_i])
+            segmentation[coord] = largest_p
+            sizes[largest_p] += 1
+            for n in neighbours
+                p = getparent(parents, n)
+                if sizes[p] < min_size && p != largest_p
+                    parents[p] = largest_p
+                    sizes[largest_p] += sizes[p]
+                end
+            end
+        end
+    end
+    return map(segmentation) do i
+        p = getparent(parents, i)
+        if p==0 || sizes[p] < min_size
+            return 0
+        else
+            return p
+        end
+    end
 end

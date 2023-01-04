@@ -1,3 +1,6 @@
+import Colors
+import Plots
+
 function spacemap(arr; kwargs...)
     arr_h = reshape(Array(arr), frame_size...)
     Plots.heatmap(arr_h; fmt=:png, kwargs...)
@@ -16,22 +19,25 @@ function rand_color(i)
     return Colors.RGB{Colors.N0f8}(col_vec...)
 end
 
-function altRoiPlot(A, frame_size; labels=true, col_fcn::Function=rand_color, kwargs...)
+function roiImg(A, frame_size, cols)
     Ah = Array(A)
     combined = zeros(Colors.RGB{Colors.N0f8}, frame_size...)
     peaks = zeros(CartesianIndex{2}, size(A, 1))
-    cols = zeros(Colors.RGB{Colors.N0f8}, size(A, 1))
     for i=1:size(Ah, 1)
-        col_vec = rand(3)
-        col_vec ./= 0.5*sum(col_vec)
-        clamp!(col_vec, 0.0, 1.0)
-        cols[i] = col_fcn(i)
+        if sum(Ah[i, :] .^ 2) < 0.99
+            continue
+        end
         mask = reshape(Ah[i, :], frame_size...)
-        #mask ./= maximum(mask)
         max_val, peaks[i] = findmax(mask)
         mask ./= max_val
         combined .= cols[i].*mask .+ (1 .- mask).*combined
     end
+    return combined, peaks
+end
+roiImg(sol::Sol) = roiImg(sol.A, sol.frame_size, sol.colors)
+
+function altRoiPlot(A, frame_size; labels=true, col_fcn::Function=rand_color, kwargs...)
+    combined, peaks, cols = roiImg(A, frame_size; col_fcn)
     hm = Plots.heatmap(combined; format=:png, kwargs...)
     if labels
         for i=1:length(peaks)
@@ -40,6 +46,8 @@ function altRoiPlot(A, frame_size; labels=true, col_fcn::Function=rand_color, kw
     end
     return hm
 end
+
+altRoiPlot(sol::Sol; kwargs...) = altRoiPlot(sol.A, sol.frame_size; kwargs...)
 
 function tracePlot(traces...; fps=20, window=20)
     maxval, argmax = findmax(traces[1])
@@ -52,3 +60,5 @@ function tracePlot(traces...; fps=20, window=20)
     end
     plot(p1, p2, layout=(2,1), legend=false)
 end
+
+tracePlot(sol::Sol, j) = tracePlot(Array(sol.R[:, j]), Array(sol.C[:, j]))
