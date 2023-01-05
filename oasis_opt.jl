@@ -58,6 +58,11 @@ function oasis_opt!(sol::Sol, j)
     #TODO constrain gamma, lambda > 0 (maybe for gamma something like > 0.5?)
     opt = Optim.optimize(loss, [sol.gammas[j], sol.lambdas[j]]; iterations=10)
     gamma, lambda = opt.minimizer
+
+    #Temporary hack:
+    gamma = clamp(gamma, 0.3, 0.9999)
+    lambda = clamp(lambda, 0.0, Inf)
+    
     sol.C[:, j], sol.S[:, j] = oasis(Rj, gamma, lambda)
     sol.gammas[j] = gamma
     sol.lambdas[j] = lambda

@@ -5,7 +5,7 @@ function initA!(sol::Sol; threshold=2e-2, median_wnd=1)
     if median_wnd > 1
         projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
     end
-    rois_list = segment_peaks(projection, threshold)
+    rois_list = segment_peaks_unionfind(projection)#segment_peaks(projection, threshold)
     rois = SparseArrays.sparse(hcat(rois_list...)')
     sol.A = CUDA.cu(rois)
 end
@@ -166,15 +166,14 @@ function getparent(parents, i)
     end
 end
 
-function segment_peaks_unionfind(I, min_size, threshold)
+function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000)
     segmentation = zeros(Int64, size(I))
     sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
     parents = Int64[]
     sizes = Int64[]
+
+    #Step 1: cluster all pixels
     for coord in sorted_pixels
-        if I[coord] < threshold
-            break
-        end
         neighbours = Int64[]
         for offs in [(0,1), (0,-1), (1,0), (-1,0)]
             offs_coord = coord + CartesianIndex(offs...)
@@ -205,12 +204,41 @@ function segment_peaks_unionfind(I, min_size, threshold)
             end
         end
     end
-    return map(segmentation) do i
+    seg = map(segmentation) do i
         p = getparent(parents, i)
-        if p==0 || sizes[p] < min_size
-            return 0
+        (p==0 || sizes[p] < min_size) ? 0 : p
+    end
+
+    #Step 2: Go through all candidate clusters and filter out the ones that
+    #are unlikely to be noise
+    rois_list = SparseArrays.SparseVector{Float32, Int32}[]
+    c_s = 0.0
+    c_ss = 0.0
+    c_n = 0
+    segs = unique(seg)
+    segs = sort(segs, by=i->Statistics.mean(I[seg .== i] .^ 2))
+    for seg_id = segs
+        patch = I[seg .== seg_id]
+        n = length(patch)
+        keep = false
+        if c_n > min_n
+            c_mean = c_s / c_n
+            c_std  = sqrt(c_ss / c_n - (c_mean .^ 2))
+            xi = sum(((patch .- c_mean) ./ c_std) .^ 2)
+            #TODO: change this so that instead of sens, we have false positive rate,
+            #and use multiple comparisons to determine the threshold
+            keep = xi > Distributions.invlogccdf(Distributions.Chisq(n), -sens)
+        end
+        if keep
+            new_roi = SparseArrays.sparse(reshape(clamp.(0, I .* (seg .== seg_id), Inf), :))
+            new_roi ./= LinearAlgebra.norm(new_roi)
+            push!(rois_list, new_roi)
         else
-            return p
+            c_s += sum(patch)
+            c_ss += sum(patch .^ 2)
+            c_n += n
+            #seg[seg .== seg_id] .= 0
         end
     end
+    return rois_list
 end

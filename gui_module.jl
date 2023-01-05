@@ -203,8 +203,8 @@ function initBackground!(guiState::GUIState)
     guiState.sol[] = guiState.sol[]
 end
 
-function updateTraces!(guiState::GUIState)
-    Main.updateTraces!(guiState.vid[], guiState.sol[], deconvFcn! = Main.oasis_opt!)
+function updateTraces!(guiState::GUIState, deconvFcn! = Main.oasis_opt!)
+    Main.updateTraces!(guiState.vid[], guiState.sol[]; deconvFcn!)
     guiState.sol[] = guiState.sol[]
 end
 

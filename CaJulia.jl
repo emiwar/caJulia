@@ -5,6 +5,8 @@ import SparseArrays
 import HDF5
 import Colors
 import GLMakie
+import Distributions
+import LinearAlgebra
 using ProgressMeter
 #include("motion_correction.jl")
 include("videoLoaders/videoLoaders.jl"); using .VideoLoaders
@@ -26,16 +28,18 @@ example_files = ["20211016_163921_animal1learnday1.nwb",
                  "20211019_161956_animal1learnday4.nwb",
                  "20211020_150705_animal1learnday5.nwb",
                  "20211021_172832_animal1learnday6.nwb",
-                 "20211101_171346_animal1reversalday15.nwb"]
+                 "20211101_171346_animal1reversalday15.nwb",
+                 "20211016_173112_animal3learnday1.nwb"]
 example_files_huge = ["recording_20211016_163921.hdf5",
                       "recording_20220919_135612.hdf5"]
 #folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1"
 #folder *= "/1st batch oct 2021/Oprm1_cal_im_gCamp8_1221_dataanalysis/exported videos/"
 #nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files_huge[1], "images")
-#splitLoader = VideoLoaders.SplitLoader(nwbLoader, 20)
-alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_animal3.csv", 10;
-                                 pathPrefix = "../data/")
-hostCache = VideoLoaders.CachedHostLoader(alignedLoader; max_memory=3.2e10)
+nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[end])
+splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
+#alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_animal3.csv", 10;
+#                                 pathPrefix = "../data/")
+hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
 #minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
 #VideoLoaders.calcmin!(minSubtr);
 deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.0e10)
@@ -45,7 +49,7 @@ gui = GUI.GUIState(deviceCache);
 display(gui.fig)
 GUI.calcI!(gui);
 
-GUI.initA!(gui; threshold=3e-3, median_wnd=5);
+GUI.initA!(gui);
 println("Done initing A ($(ncells(gui.sol[])) cells found.)")
 GUI.initBackground!(gui);
 GUI.updateTraces!(gui);
@@ -55,7 +59,7 @@ GUI.mergeCells!(gui);
 #sol = Sol(deviceCache);
 #sol.I = negentropy_img(deviceCache);
 sol = gui.sol[];
-initA!(sol; threshold=3e-3, median_wnd=5);
+initA!(sol);
 zeroTraces!(sol);
 initBackgrounds!(deviceCache, sol);
 updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!);
