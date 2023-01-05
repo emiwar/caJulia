@@ -19,6 +19,7 @@ framesize(vl::HDFLoader) = (length(vl.subset[1]), length(vl.subset[2]))
 filename(vl::HDFLoader) = vl.filename
 nvideos(vl::HDFLoader) = 1
 video_idx(vl::HDFLoader) = 1
+multivideo(vl::HDFLoader) = false
 
 function NWBLoader(filename, subset=nothing)
     fid = HDF5.h5open(filename, "r")
@@ -60,6 +61,7 @@ Base.eltype(::Type{MultiVideoLoader{T}}) where T = eltype(T)
 framesize(vl::MultiVideoLoader) = framesize(first(vl.sources))
 nframes(vl::MultiVideoLoader) = sum(nframes.(vl.sources))
 nsegs(vl::MultiVideoLoader) = sum(length.(vl.segs_per_video))
+multivideo(vl::MultiVideoLoader) = true
 nvideos(vl::MultiVideoLoader) = length(vl.segs_per_video)
 optimalorder(vl::MultiVideoLoader) = union((vl.segs_per_video)...)
 function framerange_video(vl::MultiVideoLoader, video_id)

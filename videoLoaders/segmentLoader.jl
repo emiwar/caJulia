@@ -32,6 +32,7 @@ framerange(vl::SplitLoader, i::Int64) = vl.frame_ranges[i]
 readseg(vl::SplitLoader, i::Int64) = readseg(vl.sources[i])
 filename(vl::SplitLoader, i::Int64) = filename(vl.sources[i])
 nvideos(vl::SplitLoader) = length(unique(filename.(vl.sources)))
+multivideo(vl::SplitLoader) = false #nvideos(vl) > 1
 video_idx(vl::SplitLoader, i::Int64) = video_idx(vl.sources[i])
 
 function framerange_video(vl::SplitLoader, video_i)
