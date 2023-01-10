@@ -13,6 +13,12 @@ include("segmentLoader.jl")
 include("cachedLoader.jl")
 include("subtractMinLoader.jl")
 
+struct EmptyLoader <: VideoLoader end
+nframes(::EmptyLoader) = 0
+nvideos(::EmptyLoader) = 0
+framesize(::EmptyLoader) = (100, 100)
+readframe(vl::EmptyLoader, i) = zeros(Int16, framesize(vl))
+location(::EmptyLoader) = :nowhere
 
 function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2)
     dims == 2 || error("Only dims=2 is implemented for mapreduce")
@@ -23,6 +29,25 @@ function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2
     end
     CUDA.synchronize()
     return res
+end
+
+function openvideo(s::String; nsplits=5, hostCacheSize=3.2e10,
+                              deviceCacheSize=1.0e10)
+    if !isfile(s)
+        #TODO: show error message
+        return EmptyLoader()
+    end
+    if endswith(s, ".nwb")
+        baseloader = NWBLoader(s)
+    elseif endswith(s, ".hdf")
+        baseloader = HDFLoader(s, "images")
+    else
+        #TODO: show error message
+        return EmptyLoader()
+    end
+    splitloader = SplitLoader(baseloader, nsplits)
+    hostcache = CachedHostLoader(splitloader; max_memory=hostCacheSize)
+    devicecache = CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
 end
 
 end

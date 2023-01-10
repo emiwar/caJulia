@@ -20,6 +20,7 @@ filename(vl::HDFLoader) = vl.filename
 nvideos(vl::HDFLoader) = 1
 video_idx(vl::HDFLoader) = 1
 multivideo(vl::HDFLoader) = false
+location(::HDFLoader) = :disk
 
 function NWBLoader(filename, subset=nothing)
     fid = HDF5.h5open(filename, "r")
