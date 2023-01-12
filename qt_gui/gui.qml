@@ -11,7 +11,12 @@ ApplicationWindow {
   width: 512
   height: 512
   visible: true
+  //applicationName: "CaJulia"
   //Material.theme: Material.Dark
+  Connections {
+        target: timer
+        onTimeout: Julia.checkworkerstatus()
+  }
 
   menuBar: MenuBar {
         Menu {
@@ -21,12 +26,19 @@ ApplicationWindow {
                 onTriggered: fileDialog.visible = true;
             }
             Action { 
+                text: qsTr("Ping worker") 
+                onTriggered: Julia.pingworker();
+            }
+            Action { 
                 text: qsTr("Quit") 
                 onTriggered: Qt.quit();
             }
         }
     }
-ColumnLayout {
+  footer: Text {
+    text: "Footer"
+  }
+  ColumnLayout {
     spacing: 6
     anchors.centerIn: parent
     anchors.fill: parent
@@ -99,17 +111,18 @@ ColumnLayout {
         }
         Button {
             id: stepBackButton
-            text: "<"
+            text: "🡠"
             Layout.preferredWidth: height
         }
         Button {
             id: stepForwardButton
-            text: ">"
+            text: "🡢"
             Layout.preferredWidth: height
         }
         Button {
             id: playButton
-            text: "|>"
+            text: "⏵"
+            //text: "|>"
             Layout.preferredWidth: height
         }
     }
@@ -132,5 +145,3 @@ ColumnLayout {
     //Component.onCompleted: visible = true
   }
 }
-
-
