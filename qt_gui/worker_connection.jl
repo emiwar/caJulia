@@ -9,6 +9,7 @@ const status = RemoteChannel(()->Channel{Tuple{String, Float64}}(128))
 const responses = RemoteChannel(()->Channel{Tuple{Symbol, Any}}(128))
 
 @everywhere function work(jobs, status, responses)
+    put!(status, ("Worker ready", -1.0))
     while true
         listenforjobs(jobs, status, responses)
         while !isempty(jobqueue)
@@ -20,5 +21,12 @@ const responses = RemoteChannel(()->Channel{Tuple{Symbol, Any}}(128))
     end
 end
 
-remotecall_fetch(()->include("qt_gui/worker.jl"), worker_proc_id)
+function send_request(type::Symbol, data)
+    put!(jobs, (false, type, data))
+end
+function submit_job(type::Symbol, data)
+    put!(jobs, (true, type, data))
+end
+
+remotecall(()->include("qt_gui/worker.jl"), worker_proc_id)
 remote_do(work, worker_proc_id, jobs, status, responses)

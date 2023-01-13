@@ -15,7 +15,7 @@ ApplicationWindow {
   //Material.theme: Material.Dark
   Connections {
         target: timer
-        onTimeout: Julia.checkworkerstatus()
+        onTimeout: Julia.checkworkerstatus(observables)
   }
 
   menuBar: MenuBar {
@@ -35,9 +35,27 @@ ApplicationWindow {
             }
         }
     }
-  footer: Text {
-    text: "Footer"
-  }
+  footer: RowLayout {
+        spacing: 20
+        Layout.fillWidth: true
+        Text {
+            id: footerStatus
+            text: observables.status_text
+        }
+        RowLayout {
+            spacing: 6
+            ProgressBar {
+                Layout.fillWidth: true
+                id: footerStatusProgressBar
+                value: observables.status_progress
+            }
+            Text {
+                id: footerStatusProgressBarLabel
+                text: (100*observables.status_progress)+"%"
+            }
+            visible: observables.status_progress >= 0.0
+        }
+    }
   ColumnLayout {
     spacing: 6
     anchors.centerIn: parent
@@ -47,6 +65,7 @@ ApplicationWindow {
     anchors.rightMargin: 5
     anchors.bottomMargin: 5
     RowLayout {
+        Layout.preferredHeight: 50
         JuliaCanvas {
             id: viewport1
             paintFunction: paint_cfunction1
@@ -104,10 +123,14 @@ ApplicationWindow {
             Layout.minimumWidth: 100
             //Layout.minimumHeight: 100
             onValueChanged: {
-                observables.current_time = value;
-                viewport1.update();
-                viewport2.update();
+                observables.fractional_time = value;
+                //viewport1.update();
+                //viewport2.update();
             }
+        }
+        Text {
+            id: timeSliderLabel
+            text: ""+observables.frame_n
         }
         Button {
             id: stepBackButton
@@ -122,12 +145,20 @@ ApplicationWindow {
         Button {
             id: playButton
             text: "⏵"
-            //text: "|>"
             Layout.preferredWidth: height
         }
     }
   }
 
+  JuliaSignals {
+    signal updateDisplay(var disp_id)
+    onUpdateDisplay: {
+        if (disp_id == 1) viewport1.update()
+        else if (disp_id == 2) viewport2.update()
+        else if (disp_id == 3) viewport3.update()
+        else if (disp_id == 4) viewport4.update()
+    }
+  }
 
   FileDialog {
     id: fileDialog
@@ -143,5 +174,13 @@ ApplicationWindow {
     //    console.log("Canceled")
     //}
     //Component.onCompleted: visible = true
+  }
+
+  Component.onCompleted: {
+    viewport1.update()
+    viewport2.update()
+    viewport3.update()
+    viewport4.update()
+    timer.start();
   }
 }
