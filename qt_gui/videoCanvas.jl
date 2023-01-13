@@ -13,10 +13,11 @@ function canvas_func(f::Function)
                         (Array{UInt32,1}, Int32, Int32))
 end
 
-function video_canvas(frame::Observable)
+function video_canvas(frame::Observable, cmin, cmax)
     function update_canvas(buffer)
         f = Images.imresize(frame[], size(buffer))
-        g = clamp.(f ./ 256, 0.0, 1.0)
+        range = clamp(cmax[] - cmin[], 1e-10, Inf)
+        g = clamp.((f .- cmin[]) ./ range, 0.0, 1.0)
         buffer .= ARGB32.(g, g, g, 1.0)
     end
     return canvas_func(update_canvas)

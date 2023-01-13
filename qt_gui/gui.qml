@@ -66,44 +66,81 @@ ApplicationWindow {
     anchors.bottomMargin: 5
     RowLayout {
         Layout.preferredHeight: 50
-        JuliaCanvas {
-            id: viewport1
-            paintFunction: paint_cfunction1
+        ColumnLayout {
             Layout.fillWidth: true
-            //Layout.fillHeight: true
-            Layout.minimumWidth: 50
-            Layout.minimumHeight: width
-            Layout.maximumHeight: width
+            JuliaCanvas {
+                id: viewport1
+                paintFunction: paint_cfunction1
+                Layout.fillWidth: true
+                //Layout.fillHeight: true
+                Layout.minimumWidth: 50
+                Layout.minimumHeight: width
+                Layout.maximumHeight: width
+            }
+            RangeSlider {
+                Layout.fillWidth: true
+                id: viewport1ContrastSlider
+                from: 1
+                to: 512
+                second.value: 512
+                first.onMoved: {
+                    observables.cmin1 = first.value
+                }
+                second.onMoved: {
+                    observables.cmax1 = second.value
+                }
+            }
         }
-        JuliaCanvas {
-            id: viewport2
-            paintFunction: paint_cfunction2
+        ColumnLayout {
             Layout.fillWidth: true
-            //Layout.fillHeight: true
-            Layout.minimumWidth: 50
-            Layout.minimumHeight: width
-            Layout.maximumHeight: width
+            JuliaCanvas {
+                id: viewport2
+                paintFunction: paint_cfunction2
+                Layout.fillWidth: true
+                //Layout.fillHeight: true
+                Layout.minimumWidth: 50
+                Layout.minimumHeight: width
+                Layout.maximumHeight: width
+            }
+            RangeSlider {
+                Layout.fillWidth: true
+                id: viewport2ContrastSlider
+            }
         }
-        JuliaCanvas {
-            id: viewport3
-            paintFunction: paint_cfunction3
+        ColumnLayout {
             Layout.fillWidth: true
-            //Layout.fillHeight: true
-            Layout.minimumWidth: 50
-            Layout.minimumHeight: width
-            Layout.maximumHeight: width
+            JuliaCanvas {
+                id: viewport3
+                paintFunction: paint_cfunction3
+                Layout.fillWidth: true
+                //Layout.fillHeight: true
+                Layout.minimumWidth: 50
+                Layout.minimumHeight: width
+                Layout.maximumHeight: width
+            }
+            RangeSlider {
+                Layout.fillWidth: true
+                id: viewport3ContrastSlider
+            }
         }
-        JuliaCanvas {
-            id: viewport4
-            paintFunction: paint_cfunction4
+        ColumnLayout {
             Layout.fillWidth: true
-            //Layout.fillHeight: true
-            Layout.minimumWidth: 50
-            Layout.minimumHeight: width
-            Layout.maximumHeight: width
-            MouseArea {
-                anchors.fill: parent
-                onClicked:(mouse)=>console.log(mouse.x)
+            JuliaCanvas {
+                id: viewport4
+                paintFunction: paint_cfunction4
+                Layout.fillWidth: true
+                //Layout.fillHeight: true
+                Layout.minimumWidth: 50
+                Layout.minimumHeight: width
+                Layout.maximumHeight: width
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked:(mouse)=>console.log(mouse.x)
+                }
+            }
+            RangeSlider {
+                Layout.fillWidth: true
+                id: viewport4ContrastSlider
             }
         }
     }
@@ -116,14 +153,16 @@ ApplicationWindow {
         Slider {
             id: time_slider
             value: 0.0
-            //minimumValue: 0.0
-            //maximumValue: 100.0
+            //from: 1
+            //to: observables.n_frames
+            //step: 1
+            //snapMode: Slider.SnapAlways
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.minimumWidth: 100
             //Layout.minimumHeight: 100
             onValueChanged: {
-                observables.fractional_time = value;
+                observables.frame_n_float = value;
                 //viewport1.update();
                 //viewport2.update();
             }
@@ -136,11 +175,17 @@ ApplicationWindow {
             id: stepBackButton
             text: "🡠"
             Layout.preferredWidth: height
+            onClicked: {
+                observables.frame_n_float -= 1.0/observables.n_frames
+            }
         }
         Button {
             id: stepForwardButton
             text: "🡢"
             Layout.preferredWidth: height
+            onClicked: {
+                observables.frame_n_float += 1.0/observables.n_frames
+            }
         }
         Button {
             id: playButton
