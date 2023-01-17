@@ -21,12 +21,13 @@ const responses = RemoteChannel(()->Channel{Tuple{Symbol, Any}}(128))
     end
 end
 
-function send_request(type::Symbol, data)
+function send_request(type::Symbol, data=nothing)
     put!(jobs, (false, type, data))
 end
-function submit_job(type::Symbol, data)
+function submit_job(type::Symbol, data=nothing)
     put!(jobs, (true, type, data))
 end
 
-remotecall(()->include("qt_gui/worker.jl"), worker_proc_id)
+loadcodefuture = remotecall(()->include("qt_gui/worker.jl"), worker_proc_id)
 remote_do(work, worker_proc_id, jobs, status, responses)
+

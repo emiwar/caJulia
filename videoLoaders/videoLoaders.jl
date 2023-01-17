@@ -14,11 +14,13 @@ include("cachedLoader.jl")
 include("subtractMinLoader.jl")
 
 struct EmptyLoader <: VideoLoader end
-nframes(::EmptyLoader) = 0
-nvideos(::EmptyLoader) = 0
+nframes(::EmptyLoader) = 1
+nvideos(::EmptyLoader) = 1
 framesize(::EmptyLoader) = (100, 100)
 readframe(vl::EmptyLoader, i) = zeros(Int16, framesize(vl))
 location(::EmptyLoader) = :nowhere
+frame2seg(::EmptyLoader, _) = 1
+video_idx(::EmptyLoader, _) = 1
 
 function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2)
     dims == 2 || error("Only dims=2 is implemented for mapreduce")

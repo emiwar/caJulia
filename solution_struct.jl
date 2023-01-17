@@ -45,7 +45,11 @@ function zeroTraces!(sol::Sol; gamma_guess=0.8, lambda_guess=50.0)
 end
 
 function reconstruct_frame(sol::Sol, frame_id, vl)
-    f = (sol.C[frame_id, :]' * sol.A)'
+    if ncells(sol) == 0
+       f = CUDA.zeros(Float32, prod(framesize(vl)))
+    else
+       f = (sol.C[frame_id, :]' * sol.A)'
+    end
     for bg in sol.backgrounds
         f .+= reconstruct_frame(bg, frame_id, vl)
     end

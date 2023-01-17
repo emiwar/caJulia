@@ -19,22 +19,49 @@ ApplicationWindow {
   }
 
   menuBar: MenuBar {
-        Menu {
-            title: qsTr("File")
-            Action { 
-                text: qsTr("Open video") 
-                onTriggered: fileDialog.visible = true;
-            }
-            Action { 
-                text: qsTr("Ping worker") 
-                onTriggered: Julia.pingworker();
-            }
-            Action { 
-                text: qsTr("Quit") 
-                onTriggered: Qt.quit();
-            }
+    Menu {
+        title: qsTr("File")
+        Action { 
+            text: qsTr("Open video") 
+            onTriggered: fileDialog.visible = true;
+        }
+        Action { 
+            text: qsTr("Ping worker") 
+            onTriggered: Julia.pingworker();
+        }
+        Action { 
+            text: qsTr("Quit") 
+            onTriggered: Qt.quit();
         }
     }
+    Menu {
+        title: qsTr("Process")
+        Action { 
+            text: qsTr("Calculate init image") 
+            onTriggered: Julia.calcinitframe();
+        }
+        Action { 
+            text: qsTr("Find footprints") 
+            onTriggered: Julia.initfootprints();
+        }
+        Action { 
+            text: qsTr("Initiate backgrounds") 
+            onTriggered: Julia.initbackgrounds();
+        }
+        Action { 
+            text: qsTr("Update traces") 
+            onTriggered: Julia.updatetraces();
+        }
+        Action { 
+            text: qsTr("Update footprints") 
+            onTriggered: Julia.updatefootprints();
+        }
+        Action { 
+            text: qsTr("Merge cells") 
+            onTriggered: Julia.mergecells();
+        }
+    }
+  }
   footer: RowLayout {
         spacing: 20
         Layout.fillWidth: true
@@ -105,6 +132,16 @@ ApplicationWindow {
             RangeSlider {
                 Layout.fillWidth: true
                 id: viewport2ContrastSlider
+                from: 1
+                to: 512
+                second.value: 512
+                first.onMoved: {
+                    observables.cmin2 = first.value
+                }
+                second.onMoved: {
+                    observables.cmax2 = second.value
+                }
+            
             }
         }
         ColumnLayout {
@@ -121,6 +158,14 @@ ApplicationWindow {
             RangeSlider {
                 Layout.fillWidth: true
                 id: viewport3ContrastSlider
+                from: -8
+                to: 8
+                first.onMoved: {
+                    observables.cmin3 = first.value
+                }
+                second.onMoved: {
+                    observables.cmax3 = second.value
+                }
             }
         }
         ColumnLayout {

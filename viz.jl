@@ -1,5 +1,5 @@
-import Colors
-import Plots
+#import Colors
+#import Plots
 
 function spacemap(arr; kwargs...)
     arr_h = reshape(Array(arr), frame_size...)

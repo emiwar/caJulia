@@ -13,12 +13,28 @@ function canvas_func(f::Function)
                         (Array{UInt32,1}, Int32, Int32))
 end
 
-function video_canvas(frame::Observable, cmin, cmax)
+function video_canvas(frame::Observable, cmin, cmax, cmap=:grays)
+    colorscheme = ColorSchemes.colorschemes[cmap]
     function update_canvas(buffer)
         f = Images.imresize(frame[], size(buffer))
         range = clamp(cmax[] - cmin[], 1e-10, Inf)
-        g = clamp.((f .- cmin[]) ./ range, 0.0, 1.0)
-        buffer .= ARGB32.(g, g, g, 1.0)
+        for ind in eachindex(buffer)
+            pixel = f[ind]
+            if isfinite(pixel)
+                scaled = (pixel - cmin[]) / range
+                buffer[ind] = ARGB32(colorscheme[scaled])
+            else
+                buffer[ind] = ARGB32(0.0, 0.0, 0.0, 1.0)
+            end
+        end
+    end
+    return canvas_func(update_canvas)
+end
+
+function video_canvas_raw(frame::Observable)
+    @assert eltype(frame) == Matrix{Colors.ARGB32}
+    function update_canvas(buffer)
+        buffer .= Images.imresize(frame[], size(buffer))
     end
     return canvas_func(update_canvas)
 end
