@@ -1,33 +1,38 @@
 using Distributed
-using DataStructures
 
-const worker_proc_id = addprocs(1, exeflags="--project")[1]
-
-const jobs = RemoteChannel(()->Channel{Tuple{Bool, Symbol, Any}}(128))
-
-const status = RemoteChannel(()->Channel{Tuple{String, Float64}}(128))
-const responses = RemoteChannel(()->Channel{Tuple{Symbol, Any}}(128))
-
-@everywhere function work(jobs, status, responses)
-    put!(status, ("Worker ready", -1.0))
-    while true
-        listenforjobs(jobs, status, responses)
-        while !isempty(jobqueue)
-            jobtype, jobdata = dequeue!(jobqueue)
-            processjob(jobtype, jobdata, status, responses)
-            listenforjobs(jobs, status, responses)
-        end
-        wait(jobs)
+mutable struct WorkerConnection
+    proc_id::Int
+    jobs::RemoteChannel{Channel{Tuple{Bool, Symbol, Any}}}
+    status::RemoteChannel{Channel{Tuple{String, Float64}}}
+    responses::RemoteChannel{Channel{Tuple{Symbol, Any}}}
+    function WorkerConnection()
+        jobs = RemoteChannel(()->Channel{Tuple{Bool, Symbol, Any}}(128))
+        status = RemoteChannel(()->Channel{Tuple{String, Float64}}(128))
+        responses = RemoteChannel(()->Channel{Tuple{Symbol, Any}}(128))
+        proc_id = startworker(jobs, status, responses)
+        connection = new(proc_id, jobs, status, responses)
+        finalizer((conn)->(@async rmprocs(conn.proc_id)), connection)
     end
 end
 
-function send_request(type::Symbol, data=nothing)
-    put!(jobs, (false, type, data))
-end
-function submit_job(type::Symbol, data=nothing)
-    put!(jobs, (true, type, data))
+function startworker(jobs, status, responses)
+    put!(status, ("Starting worker process", -1.0))
+    proc_id = addprocs(1, exeflags="--project")[1]
+    errormonitor(@async begin
+        remotecall_fetch(proc_id, status) do status
+            put!(status, ("Initializing worker", 0.0))
+            include("qt_gui/worker.jl")
+        end
+        remotecall_fetch((j,s,r)->work(j,s,r), proc_id, jobs, status, responses)
+    end)
+    return proc_id
 end
 
-loadcodefuture = remotecall(()->include("qt_gui/worker.jl"), worker_proc_id)
-remote_do(work, worker_proc_id, jobs, status, responses)
+function send_request(connection::WorkerConnection, type::Symbol, data=nothing)
+    put!(connection.jobs, (false, type, data))
+end
+function submit_job(connection::WorkerConnection, type::Symbol, data=nothing)
+    put!(connection.jobs, (true, type, data))
+end
+
 

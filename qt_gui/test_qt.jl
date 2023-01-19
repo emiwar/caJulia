@@ -7,20 +7,21 @@ using Observables
 using QML
 using Qt5QuickControls_jll
 using Qt5QuickControls2_jll
-include("videoCanvas.jl")
 include("worker_connection.jl")
+include("videoCanvas.jl")
 include("handle_responses.jl")
 include("actions.jl")
 
+
 function checkworkerstatus(observables)
     yield() #Appearently needed to refresh the channels
-    while isready(status)
-        st, sp = take!(status)
+    while isready(conn.status)
+        st, sp = take!(conn.status)
         observables["status_text"][] = st
         observables["status_progress"][] = sp
     end
-    while isready(responses)
-        response_type, data = take!(responses)
+    while isready(conn.responses)
+        response_type, data = take!(conn.responses)
         handle_response(response_type, data, observables)
     end
 end
@@ -39,8 +40,8 @@ function init_observables()
     observables["ymin"] = Observable(1)
     observables["ymax"] = Observable(5)
     on(observables["frame_n"]) do f
-        send_request(:rawframe, f)
-        send_request(:reconstructedframe, f)
+        send_request(conn, :rawframe, f)
+        send_request(conn, :reconstructedframe, f)
     end
     for i=1:2
         observables["cmin$i"] = Observable(0.0)
@@ -72,6 +73,8 @@ on((_)->(@emit updateDisplay(1)), raw_frame)
 on((_)->(@emit updateDisplay(2)), rec_frame)
 on((_)->(@emit updateDisplay(3)), init_frame)
 on((_)->(@emit updateDisplay(4)), footprints_frame)
+
+conn = WorkerConnection()
 function run_gui()
     @qmlfunction openvideo
     @qmlfunction checkworkerstatus
@@ -92,6 +95,6 @@ function run_gui()
         observables = observables
     )
     QML.exec()
-    send_request(:rawframe, 1)
+    send_request(conn, :rawframe, 1)
 end
 run_gui()

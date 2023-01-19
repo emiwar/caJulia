@@ -11,6 +11,7 @@ function handle_response(response_type::Symbol, data, observables)
     elseif response_type == :footprints
         img, peaks, = data
         footprints_frame[] = Colors.ARGB32.(img)
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
     elseif response_type == :nframes
         observables["n_frames"][] = data
         println("nframes = $data")

@@ -1,6 +1,6 @@
 
 function pingworker()
-    send_request(:ping)
+    send_request(conn, :ping)
 end
 
 function openvideo(Qfilename)
@@ -10,29 +10,29 @@ function openvideo(Qfilename)
     else
         filename = String(QString(Qfilename))[8:end]
     end
-    submit_job(:loadvideo, filename)
+    submit_job(conn, :loadvideo, filename)
 end
 
 function calcinitframe()
-    submit_job(:calcinitframe)
+    submit_job(conn, :calcinitframe)
 end
 
 function initfootprints()
-    submit_job(:initfootprints)
+    submit_job(conn, :initfootprints)
 end
 
 function initbackgrounds()
-    submit_job(:initbackgrounds)
+    submit_job(conn, :initbackgrounds)
 end
 
 function updatetraces()
-    submit_job(:updatetraces)
+    submit_job(conn, :updatetraces)
 end
 
 function updatefootprints()
-    submit_job(:updatefootprints)
+    submit_job(conn, :updatefootprints)
 end
 
 function mergecells()
-    submit_job(:mergecells)
+    submit_job(conn, :mergecells)
 end

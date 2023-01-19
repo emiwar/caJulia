@@ -6,10 +6,11 @@ import Images
 import SparseArrays
 import HDF5
 import Colors
-import GLMakie
 import Distributions
 import LinearAlgebra
 using ProgressMeter #TODO: should remove this dependency
+
+println("Imports done")
 
 include("../videoLoaders/videoLoaders.jl"); using .VideoLoaders
 include("../solution_struct.jl")
@@ -22,22 +23,46 @@ include("../merge_split.jl")
 include("../backgrounds/backgrounds.jl")
 include("../save_result.jl")
 
-videoloader = VideoLoaders.EmptyLoader()
-solution = Sol(videoloader)
-const jobqueue = Queue{Tuple{Symbol, Any}}()
+println("Includes done")
 
-function listenforjobs(jobs, status, responses)
+mutable struct WorkerState
+    videoloader::VideoLoaders.VideoLoader
+    solution::Sol
+end
+WorkerState(videoloader) = WorkerState(videoloader, Sol(videoloader))
+WorkerState() = WorkerState(VideoLoaders.EmptyLoader())
+
+function work(jobs, status, responses)
+    jobqueue = Queue{Tuple{Symbol, Any}}()
+    workerstate = WorkerState()
+    put!(status, ("Worker ready", -1.0))
+    put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
+    put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
+    while true
+        listenforjobs(jobs, status, responses, jobqueue, workerstate)
+        while !isempty(jobqueue)
+            jobtype, jobdata = dequeue!(jobqueue)
+            processjob(jobtype, jobdata, status, responses, workerstate)
+            listenforjobs(jobs, status, responses, jobqueue, workerstate)
+        end
+        wait(jobs)
+    end
+end
+
+function listenforjobs(jobs, status, responses, jobqueue, workerstate)
     while isready(jobs)
         toqueue, requesttype, data = take!(jobs)
         if toqueue
             enqueue!(jobqueue, (requesttype, data))
         else
-            processrequest(requesttype, data, status, responses)
+            processrequest(requesttype, data, status, responses, workerstate)
         end
     end
 end
 
-function processrequest(requesttype, data, status, responses)
+function processrequest(requesttype, data, status, responses, workerstate)
+    videoloader = workerstate.videoloader
+    solution = workerstate.solution
     if requesttype == :ping
         put!(responses, (:ping, "Hello"))
         put!(status, ("Worker replied to ping", -1.0))
@@ -67,15 +92,17 @@ function processrequest(requesttype, data, status, responses)
     end
 end
 
-function processjob(jobtype, data, status, responses)
+function processjob(jobtype, data, status, responses, workerstate)
+    videoloader = workerstate.videoloader
+    solution = workerstate.solution
     if jobtype == :loadvideo
         filename = data
         put!(status, ("Loading $filename", -1.0))
-        global videoloader = VideoLoaders.openvideo(filename)
-        global solution = Sol(videoloader)
+        workerstate.videoloader = VideoLoaders.openvideo(filename)
+        workerstate.solution = Sol(workerstate.videoloader)
         put!(responses, (:videoloaded, filename))
-        put!(responses, (:nframes, VideoLoaders.nframes(videoloader)))
-        put!(responses, (:framesize, VideoLoaders.framesize(videoloader)))
+        put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
+        put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
         put!(status, ("Loaded $filename", 1.0))
     elseif jobtype == :calcinitframe
         if VideoLoaders.location(videoloader) == :nowhere
@@ -93,7 +120,7 @@ function processjob(jobtype, data, status, responses)
         put!(status, ("Initiated footprints.", 1.0))
         put!(status, ("Creating empty traces", 0.0))
         zeroTraces!(solution)
-        send_footprints(status, responses)
+        send_footprints(workerstate, status, responses)
     elseif jobtype == :initbackgrounds
         put!(status, ("Initiating backgrounds", 0.0))
         initBackgrounds!(videoloader, solution)
@@ -106,20 +133,22 @@ function processjob(jobtype, data, status, responses)
         put!(status, ("Updating footprints", 0.0))
         updateROIs!(videoloader, solution)
         put!(status, ("Updated footprints", 1.0))
-        send_footprints(status, responses)
+        send_footprints(workerstate, status, responses)
     elseif jobtype == :mergecells
         put!(status, ("Merging cells", 0.0))
         merge!(solution, thres=.6)
         put!(status, ("Merged cells", 1.0))
-        send_footprints(status, responses)
+        send_footprints(workerstate, status, responses)
     end
 end
 
 
-function send_footprints(status, responses)
+function send_footprints(workerstate, status, responses)
     put!(status, ("Drawing plot of footprints", 0.0))
-    put!(responses, (:footprints, roiImg(solution)))
+    put!(responses, (:footprints, roiImg(workerstate.solution)))
     put!(status, ("Drawed plot of footprints", 1.0))
 end
+
+nothing
 
 #println("Code loaded at process $(myid())")
