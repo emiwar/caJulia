@@ -32,11 +32,13 @@ function negentropy_approx_no_mean(Y)
     @. (y3^2 / y2^3)/12.0 + y4/(y2^2) / 48.0
 end
 
-function negentropy_img_per_video(vl::VideoLoader)
+function negentropy_img_per_video(vl::VideoLoader; callback)
     nvids = nvideos(vl)
     npixels = prod(framesize(vl))
+    nsegs = VideoLoaders.nsegs(vl)
     pows = CUDA.fill((0.0, 0.0, 0.0, 0.0), npixels, nvids)
-    @showprogress "Calculating moments" for i=optimalorder(vl)
+    for (p, i)=enumerate(optimalorder(vl))
+        callback("Calculating moments", p-1, nsegs)
         seg = readseg(vl, i)
         vid_i = video_idx(vl, i)
         op = .+
@@ -45,7 +47,8 @@ function negentropy_img_per_video(vl::VideoLoader)
                                             init=(0.0, 0.0, 0.0, 0.0), dims=2)), :)
     end
     negentropy_img = CUDA.zeros(npixels, 1)
-    @showprogress "Calculating negentropy" for vid_i = 1:nvideos(vl)
+    for vid_i = 1:nvideos(vl)
+        callback("Calculating negentropy", vid_i-1, nvids)
         T = length(framerange_video(vl, vid_i))
         negentropy_img .+= map(yp->negentropy_approx((yp ./ T)...),
                                view(pows, :, vid_i)) ./ nvids

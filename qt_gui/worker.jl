@@ -95,6 +95,9 @@ end
 function processjob(jobtype, data, status, responses, workerstate)
     videoloader = workerstate.videoloader
     solution = workerstate.solution
+    function callback(label, i, N)
+        put!(status, (label, i/N))
+    end
     if jobtype == :loadvideo
         filename = data
         put!(status, ("Loading $filename", -1.0))
@@ -109,39 +112,37 @@ function processjob(jobtype, data, status, responses, workerstate)
             put!(status, ("Please load video before calculating init frame", -1.0))
         else
             put!(status, ("Calculating init image", 0.0))
-            solution.I = negentropy_img_per_video(videoloader)
+            solution.I = negentropy_img_per_video(videoloader; callback)
             frame = reshape(Array(log10.(solution.I)), solution.frame_size)
             put!(responses, (:initframe, frame))
             put!(status, ("Calculated init image", 1.0))
         end
     elseif jobtype == :initfootprints
         put!(status, ("Initiating footprints", 0.0))
-        initA!(solution)
+        initA!(solution; callback)
         put!(status, ("Initiated footprints.", 1.0))
         put!(status, ("Creating empty traces", 0.0))
         zeroTraces!(solution)
         send_footprints(workerstate, status, responses)
     elseif jobtype == :initbackgrounds
-        put!(status, ("Initiating backgrounds", 0.0))
-        initBackgrounds!(videoloader, solution)
-        put!(status, ("Initiated backgrounds", 1.0))
+        initBackgrounds!(videoloader, solution; callback)
+        #put!(status, ("Initiated backgrounds", 1.0))
     elseif jobtype == :updatetraces
         put!(status, ("Updating traces", 0.0))
-        updateTraces!(videoloader, solution, deconvFcn! = oasis_opt!)
+        updateTraces!(videoloader, solution; deconvFcn! = oasis_opt!, callback)
         put!(status, ("Updated traces", 1.0))
     elseif jobtype == :updatefootprints
         put!(status, ("Updating footprints", 0.0))
-        updateROIs!(videoloader, solution)
+        updateROIs!(videoloader, solution; callback)
         put!(status, ("Updated footprints", 1.0))
         send_footprints(workerstate, status, responses)
     elseif jobtype == :mergecells
         put!(status, ("Merging cells", 0.0))
-        merge!(solution, thres=.6)
+        merge!(solution, thres=.6; callback)
         put!(status, ("Merged cells", 1.0))
         send_footprints(workerstate, status, responses)
     end
 end
-
 
 function send_footprints(workerstate, status, responses)
     put!(status, ("Drawing plot of footprints", 0.0))

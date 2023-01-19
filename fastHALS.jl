@@ -1,9 +1,11 @@
-function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!)
+function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!, callback)
     for bg in sol.backgrounds
         prepbackgroundtraceupdate!(bg, sol, vl)
     end
     AY = CUDA.zeros(ncells(sol), nframes(vl)) #similar(sol.C')
-    @showprogress "Calculating traces" for i = optimalorder(vl)
+    N = VideoLoaders.nsegs(vl)
+    for (p, i) = enumerate(optimalorder(vl))
+        callback("Calculating traces", p-1, N) 
         Y_seg = readseg(vl, i)
         AY[:, framerange(vl, i)] .= sol.A*Y_seg
         for bg in sol.backgrounds
@@ -16,24 +18,28 @@ function updateTraces!(vl::VideoLoader, sol::Sol; deconvFcn! = zeroClamp!)
     for bg in sol.backgrounds
         updatetracecorrections!(bg, sol, vl)
     end
-    @showprogress "Deconvolving" for j=1:ncells(sol)
+    for j=1:ncells(sol)
+        callback("Deconvolving", j-1, ncells(sol)) 
         sol.R[:, j] .= view(AY, j, :) .- sol.C*view(AA, j, :) .+ view(sol.C, :, j)
         for bg in sol.backgrounds
             sol.R[:, j] .-= tracecorrection(bg, j)
         end
         deconvFcn!(sol, j)
     end
+    callback("Deconvolving", ncells(sol), ncells(sol)) 
     for bg in sol.backgrounds
         traceupdate!(bg, sol, vl)
     end
 end
 
-function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
+function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1, callback)
     for bg in sol.backgrounds
         prepupdate!(bg, sol, vl)
     end
     YC = CUDA.zeros(prod(framesize(vl)), ncells(sol))
-    @showprogress "Calculating footprints" for i = optimalorder(vl)
+    N = VideoLoaders.nsegs(vl)
+    for (p, i) = enumerate(optimalorder(vl))
+        callback("Calculating footprints", p-1, N)
         Y_seg = readseg(vl, i)
         YC .+= Y_seg*sol.C[framerange(vl, i), :]
         for bg in sol.backgrounds
@@ -54,7 +60,8 @@ function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1)
     #f1Ch = Array(C'*sol.f1)
     
     Amask = maskA(Ad, sol.frame_size; growth=roi_growth)
-    @showprogress "Updating footprints" for j=1:size(sol.A, 1)
+    for j=1:size(sol.A, 1)
+        callback("Updating footprints", j-1, size(sol.A, 1))
         Ad[j, :] .= view(YC, :, j) .- view((view(CC, j:j, :)*Ad), :) .+
                     view(Ad, j, :).*CCh[j,j]
         for bg in sol.backgrounds
@@ -113,14 +120,17 @@ function initBackground!(vl::VideoLoader, sol::Sol)
     sol.f1 .= 0.0f0
 end
 
-function initBackgrounds!(vl::VideoLoader, sol::Sol)
+function initBackgrounds!(vl::VideoLoader, sol::Sol; callback)
     for bg in sol.backgrounds
         prepinit!(bg, sol, vl)
     end
-    @showprogress "Initializing backgrounds" for i=optimalorder(vl)
+    N = VideoLoaders.nsegs(vl)
+    for (p, i)=enumerate(optimalorder(vl))
+        callback("Initializing backgrounds", p-1, N)
         seg = readseg(vl, i)
         for bg in sol.backgrounds
             initseg!(bg, seg, i, vl)
         end
     end
+    callback("Initializing backgrounds", N, N)
 end

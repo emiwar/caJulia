@@ -1,12 +1,15 @@
 import Images
 
-function initA!(sol::Sol; threshold=2e-2, median_wnd=1)
+function initA!(sol::Sol; threshold=2e-2, median_wnd=1, callback)
     projection = reshape(Array(sol.I), sol.frame_size...) 
     if median_wnd > 1
         projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
     end
+    callback("Detecting peaks", 0, 1)
     rois_list = segment_peaks_unionfind(projection)#segment_peaks(projection, threshold)
+    callback("Moving footprints to device", 0, 1)
     rois = SparseArrays.sparse(hcat(rois_list...)')
+    callback("Moving footprints to device", 0.5, 1)
     sol.A = CUDA.cu(rois)
 end
 

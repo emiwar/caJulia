@@ -1,10 +1,11 @@
-function Base.merge!(sol::Sol; thres=.8)
+function Base.merge!(sol::Sol; thres=.8, callback)
     Ad = CUDA.CuArray(sol.A)
     AA = sol.A*Ad' |> Array
     corrs = Statistics.cor(sol.C) |> Array
     N = size(sol.A, 1)
     to_delete = zeros(Bool, N)
     for i=1:N
+        callback("Merging cells", i-1, N)
         if to_delete[i]
             continue
         end

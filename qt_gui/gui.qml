@@ -16,7 +16,7 @@ ApplicationWindow {
   Connections {
         target: timer
         onTimeout: Julia.checkworkerstatus(observables)
-  }
+    }
 
   menuBar: MenuBar {
     Menu {
@@ -78,7 +78,7 @@ ApplicationWindow {
             }
             Text {
                 id: footerStatusProgressBarLabel
-                text: (100*observables.status_progress)+"%"
+                text: (100*observables.status_progress).toPrecision(3)+"%"
             }
             visible: observables.status_progress >= 0.0
         }
