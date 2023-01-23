@@ -62,3 +62,11 @@ function tracePlot(traces...; fps=20, window=20)
 end
 
 tracePlot(sol::Sol, j) = tracePlot(Array(sol.R[:, j]), Array(sol.C[:, j]))
+
+function strongestAMap(A)
+    Amax, Aargmax = Array.(findmax(CUDA.CuArray(A), dims=1));
+    peaks = getindex.(Aargmax, 1)
+    peaks[Amax .== 0.0] .= 0
+    return peaks
+end
+strongestAMap(sol::Sol) = reshape(strongestAMap(sol.A), sol.frame_size)

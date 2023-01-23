@@ -36,3 +36,18 @@ end
 function mergecells()
     submit_job(conn, :mergecells)
 end
+
+function footprintclick(rel_x, rel_y, observables)
+    w, h = size(footprints_peaks[])
+    x = Int(round(rel_x*w))
+    y = Int(round(rel_y*h))
+    cell_id = footprints_peaks[][x, y]
+    println("Clicked on $cell_id at ($x, $y)")
+    observables["traceS"][] = zero(observables["traceS"][])
+    observables["traceC"][] = zero(observables["traceC"][])
+    observables["traceR"][] = zero(observables["traceR"][])
+    observables["traceCol"][] = "#000000"
+    if cell_id > 0
+        send_request(conn, :trace, cell_id)
+    end
+end

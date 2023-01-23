@@ -91,109 +91,146 @@ ApplicationWindow {
     anchors.topMargin: 5
     anchors.rightMargin: 5
     anchors.bottomMargin: 5
-    RowLayout {
+    GridLayout {
         Layout.preferredHeight: 50
-        ColumnLayout {
+        Layout.fillWidth: true
+        columns: 4
+        rows: 2
+        JuliaCanvas {
+            id: viewport1
+            paintFunction: paint_cfunction1
             Layout.fillWidth: true
-            JuliaCanvas {
-                id: viewport1
-                paintFunction: paint_cfunction1
-                Layout.fillWidth: true
-                //Layout.fillHeight: true
-                Layout.minimumWidth: 50
-                Layout.minimumHeight: width
-                Layout.maximumHeight: width
-            }
-            RangeSlider {
-                Layout.fillWidth: true
-                id: viewport1ContrastSlider
-                from: 1
-                to: 512
-                second.value: 512
-                first.onMoved: {
-                    observables.cmin1 = first.value
-                }
-                second.onMoved: {
-                    observables.cmax1 = second.value
-                }
-            }
+            Layout.preferredWidth: 300
+            Layout.minimumWidth: 50
+            Layout.minimumHeight: width
+            Layout.maximumHeight: width
+            Layout.row: 0
+            Layout.column: 0
         }
-        ColumnLayout {
+        RangeSlider {
             Layout.fillWidth: true
-            JuliaCanvas {
-                id: viewport2
-                paintFunction: paint_cfunction2
-                Layout.fillWidth: true
-                //Layout.fillHeight: true
-                Layout.minimumWidth: 50
-                Layout.minimumHeight: width
-                Layout.maximumHeight: width
+            id: viewport1ContrastSlider
+            from: 1
+            to: 512
+            second.value: 512
+            first.onMoved: {
+                observables.cmin1 = first.value
             }
-            RangeSlider {
-                Layout.fillWidth: true
-                id: viewport2ContrastSlider
-                from: 1
-                to: 512
-                second.value: 512
-                first.onMoved: {
-                    observables.cmin2 = first.value
-                }
-                second.onMoved: {
-                    observables.cmax2 = second.value
-                }
-            
+            second.onMoved: {
+                observables.cmax1 = second.value
             }
+            Layout.row: 1
+            Layout.column: 0
         }
-        ColumnLayout {
+        JuliaCanvas {
+            id: viewport2
+            paintFunction: paint_cfunction2
             Layout.fillWidth: true
-            JuliaCanvas {
-                id: viewport3
-                paintFunction: paint_cfunction3
-                Layout.fillWidth: true
-                //Layout.fillHeight: true
-                Layout.minimumWidth: 50
-                Layout.minimumHeight: width
-                Layout.maximumHeight: width
-            }
-            RangeSlider {
-                Layout.fillWidth: true
-                id: viewport3ContrastSlider
-                from: -8
-                to: 8
-                first.onMoved: {
-                    observables.cmin3 = first.value
-                }
-                second.onMoved: {
-                    observables.cmax3 = second.value
-                }
-            }
+            Layout.preferredWidth: 300
+            Layout.minimumWidth: 50
+            Layout.minimumHeight: width
+            Layout.maximumHeight: width
+            Layout.row: 0
+            Layout.column: 1
         }
-        ColumnLayout {
+        RangeSlider {
             Layout.fillWidth: true
-            JuliaCanvas {
-                id: viewport4
-                paintFunction: paint_cfunction4
-                Layout.fillWidth: true
-                //Layout.fillHeight: true
-                Layout.minimumWidth: 50
-                Layout.minimumHeight: width
-                Layout.maximumHeight: width
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked:(mouse)=>console.log(mouse.x)
+            id: viewport2ContrastSlider
+            from: 1
+            to: 512
+            second.value: 512
+            first.onMoved: {
+                observables.cmin2 = first.value
+            }
+            second.onMoved: {
+                observables.cmax2 = second.value
+            }
+            Layout.row: 1
+            Layout.column: 1
+        }
+        JuliaCanvas {
+            id: viewport3
+            paintFunction: paint_cfunction3
+            Layout.fillWidth: true
+            Layout.preferredWidth: 300
+            Layout.minimumWidth: 50
+            Layout.minimumHeight: width
+            Layout.maximumHeight: width
+            Layout.row: 0
+            Layout.column: 2
+        }
+        RangeSlider {
+            Layout.fillWidth: true
+            id: viewport3ContrastSlider
+            from: -8
+            to: 4
+            first.value: observables.cmin3
+            second.value: observables.cmax3
+            first.onMoved: {
+                observables.cmin3 = first.value
+            }
+            second.onMoved: {
+                observables.cmax3 = second.value
+            }
+            Layout.row: 1
+            Layout.column: 2
+        }
+        
+        JuliaCanvas {
+            id: viewport4
+            paintFunction: paint_cfunction4
+            Layout.fillWidth: true
+            Layout.preferredWidth: 300
+            Layout.minimumWidth: 50
+            Layout.minimumHeight: width
+            Layout.maximumHeight: width
+            MouseArea {
+                anchors.fill: parent
+                onClicked: (mouse) => {
+                    Julia.footprintclick(mouse.x/width, mouse.y/height, observables)
                 }
             }
-            RangeSlider {
-                Layout.fillWidth: true
-                id: viewport4ContrastSlider
-            }
+            Layout.row: 0
+            Layout.column: 3
         }
     }
-    Rectangle {
+    //Rectangle {
+    //    Layout.fillWidth: true
+    //    Layout.fillHeight: true
+    //    color: "white"
+    Canvas {
+        id: traceCanvas
         Layout.fillWidth: true
         Layout.fillHeight: true
-        color: "white"
+        contextType: "2d"
+        antialiasing: true
+        onPaint: {
+            var ctx = getContext( "2d" );
+            ctx.save();
+            ctx.clearRect( 0, 0, width, height);
+            for(var trace_id=0; trace_id<2; trace_id += 1) {
+                var y = observables["trace"+("RCS"[trace_id])]
+                var x_max = y.length-1, y_max=1.5
+                if(trace_id == 1) {
+                    ctx.strokeStyle = observables["traceCol"]
+                } else {
+                    ctx.strokeStyle = "#AAAAAA"
+                }
+                ctx.beginPath()
+                ctx.moveTo(0, (1-(y[0]+.4)/y_max)*height)
+                for(var i=1; i<y.length; i+=1) {
+                    ctx.lineTo(i*width/x_max, (1-((y[i]+.4))/y_max)*height)
+                }
+                ctx.stroke()
+            }
+            ctx.restore()
+            //context.strokeStyle = Qt.rgba(.4,.6,.8)
+            //context.path = myPath
+            //context.stroke()
+        }
     }
+
+    //}
     RowLayout {
         Slider {
             id: time_slider
@@ -247,6 +284,7 @@ ApplicationWindow {
         else if (disp_id == 2) viewport2.update()
         else if (disp_id == 3) viewport3.update()
         else if (disp_id == 4) viewport4.update()
+        else if (disp_id == 5) traceCanvas.requestPaint()
     }
   }
 

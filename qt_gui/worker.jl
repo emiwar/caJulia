@@ -89,6 +89,20 @@ function processrequest(requesttype, data, status, responses, workerstate)
     elseif requesttype == :initframe
         frame = reshape(Array(log10.(solution.I)), solution.frame_size)
         put!(responses, (:initframe, frame))
+    elseif requesttype == :trace
+        cellid = Int(data)
+        S = workerstate.solution.S
+        C = workerstate.solution.C
+        R = workerstate.solution.R
+        if cellid > 0 && cellid <= size(C, 2)
+            traceS = Array(view(S, :, cellid))
+            traceC = Array(view(C, :, cellid))
+            traceR = Array(view(R, :, cellid))
+            col = workerstate.solution.colors[cellid]
+            put!(responses, (:trace, (traceS, traceC, traceR, col)))
+        else
+            put!(status, ("Invalid cell $cellid", -1))
+        end
     end
 end
 
@@ -146,7 +160,9 @@ end
 
 function send_footprints(workerstate, status, responses)
     put!(status, ("Drawing plot of footprints", 0.0))
-    put!(responses, (:footprints, roiImg(workerstate.solution)))
+    img, peaks = roiImg(workerstate.solution)
+    amap = strongestAMap(workerstate.solution)
+    put!(responses, (:footprints, (img, amap)))
     put!(status, ("Drawed plot of footprints", 1.0))
 end
 

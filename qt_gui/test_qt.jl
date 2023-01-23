@@ -59,20 +59,29 @@ function init_observables()
         on((_)->(@emit updateDisplay(i)), observables["ymin"])
         on((_)->(@emit updateDisplay(i)), observables["ymax"])
     end
+
+    observables["traceS"] = Observable(zeros(Float32, 10))
+    observables["traceC"] = Observable(zeros(Float32, 10))
+    observables["traceR"] = Observable(zeros(Float32, 10))
+    observables["traceCol"] = Observable("#000000")
+    on((_)->(@emit updateDisplay(5)), observables["traceS"])
+    on((_)->(@emit updateDisplay(5)), observables["traceC"])
+    on((_)->(@emit updateDisplay(5)), observables["traceR"])
     return observables
 end
 
-const raw_frame = Observable(zeros(Int16, 100, 100))
-const rec_frame = Observable(zeros(Float32, 100, 100))
-const init_frame = Observable(zeros(Float32, 100, 100))
-const footprints_frame = Observable(ones(Colors.ARGB32, 100, 100))
+const raw_frame = Observable(zeros(Int16, 100, 100));
+const rec_frame = Observable(zeros(Float32, 100, 100));
+const init_frame = Observable(zeros(Float32, 100, 100));
+const footprints_frame = Observable(ones(Colors.ARGB32, 100, 100));
+const footprints_peaks = Observable(zeros(Int, 100, 100));
 #function updateDisplays()
 #    @emit updateDisplay(1)
 #end
-on((_)->(@emit updateDisplay(1)), raw_frame)
-on((_)->(@emit updateDisplay(2)), rec_frame)
-on((_)->(@emit updateDisplay(3)), init_frame)
-on((_)->(@emit updateDisplay(4)), footprints_frame)
+on((_)->(@emit updateDisplay(1)), raw_frame);
+on((_)->(@emit updateDisplay(2)), rec_frame);
+on((_)->(@emit updateDisplay(3)), init_frame);
+on((_)->(@emit updateDisplay(4)), footprints_frame);
 
 conn = WorkerConnection()
 function run_gui()
@@ -85,6 +94,7 @@ function run_gui()
     @qmlfunction updatetraces
     @qmlfunction updatefootprints
     @qmlfunction mergecells
+    @qmlfunction footprintclick
     observables = init_observables()
     QML.loadqml("qt_gui/gui.qml",
         paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"]),
@@ -94,7 +104,8 @@ function run_gui()
         timer = QTimer(),
         observables = observables
     )
-    QML.exec()
     send_request(conn, :rawframe, 1)
+    QML.exec()
+    return observables
 end
-run_gui()
+obs = run_gui();

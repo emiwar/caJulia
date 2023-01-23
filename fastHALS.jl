@@ -70,6 +70,7 @@ function updateROIs!(vl::VideoLoader, sol::Sol; roi_growth=1, callback)
         Ad[j, :] .= max.(view(Ad, j, :), 0) .* view(Amask, j, :)
         Ad[j, :] ./= CUDA.norm(Ad[j, :]) .+ 1.0f-10
     end
+    callback("Updating footprints", size(sol.A, 1), size(sol.A, 1))
     for bg in sol.backgrounds
         update!(bg, sol, vl)
     end
