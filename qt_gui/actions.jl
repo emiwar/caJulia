@@ -13,6 +13,16 @@ function openvideo(Qfilename)
     submit_job(conn, :loadvideo, filename)
 end
 
+function saveresult(Qfilename)
+    #TODO: must be possible to parse this safer
+    if Sys.iswindows()
+        filename = String(QString(Qfilename))[9:end]
+    else
+        filename = String(QString(Qfilename))[8:end]
+    end
+    submit_job(conn, :saveresult, filename)
+end
+
 function calcinitframe()
     submit_job(conn, :calcinitframe)
 end

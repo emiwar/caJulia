@@ -90,6 +90,7 @@ on((_)->(@emit updateDisplay(4)), footprints_frame);
 conn = WorkerConnection()
 function run_gui()
     @qmlfunction openvideo
+    @qmlfunction saveresult
     @qmlfunction checkworkerstatus
     @qmlfunction pingworker
     @qmlfunction calcinitframe

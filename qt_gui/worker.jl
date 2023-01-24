@@ -157,6 +157,11 @@ function processjob(jobtype, data, status, responses, workerstate)
         merge!(solution, thres=.6; callback)
         put!(status, ("Merged cells", 1.0))
         send_footprints(workerstate, status, responses)
+    elseif jobtype == :saveresult
+        filename = data
+        put!(status, ("Saving result to $filename", 0.0))
+        to_hdf(filename, solution, videoloader)
+        put!(status, ("Saved result to $filename", 1.0))
     end
 end
 

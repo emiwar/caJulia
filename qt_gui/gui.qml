@@ -8,8 +8,8 @@ import QtQuick.Controls.Material 2.15
 
 ApplicationWindow {
   title: "Calcium Trace Extraction with Julia"
-  width: 512
-  height: 512
+  width: 1024
+  height: 1024*(3.0/4.0)
   visible: true
   //applicationName: "CaJulia"
   Material.theme: Material.Dark
@@ -24,7 +24,11 @@ ApplicationWindow {
         title: qsTr("File")
         Action { 
             text: qsTr("Open video") 
-            onTriggered: fileDialog.visible = true;
+            onTriggered: openVideoDialog.visible = true;
+        }
+        Action { 
+            text: qsTr("Save result") 
+            onTriggered: saveResultDialog.visible = true;
         }
         Action { 
             text: qsTr("Ping worker") 
@@ -60,6 +64,15 @@ ApplicationWindow {
         Action { 
             text: qsTr("Merge cells") 
             onTriggered: Julia.mergecells();
+        }
+    }
+    Menu {
+        title: qsTr("Settings")
+        Action { 
+            id: sameContrastCheckbox
+            text: qsTr("Same contrast")
+            checkable: true
+            checked: false
         }
     }
   }
@@ -102,30 +115,30 @@ ApplicationWindow {
         Text {
             Layout.row: 0
             Layout.column: 0
-            Layout.preferredWidth: 100
-            text: "Raw video"
-            color: "#FFFFFF"
+            Layout.preferredWidth: 150
+            text: "<b>Raw video</b>"
+            color: "#CCCCCC"
         }
         Text {
             Layout.row: 0
             Layout.column: 1
-            Layout.preferredWidth: 100
-            text: "Reconstructed video"
-            color: "#FFFFFF"
+            Layout.preferredWidth: 150
+            text: "<b>Reconstructed video</b>"
+            color: "#CCCCCC"
         }
         Text {
             Layout.row: 0
             Layout.column: 2
-            Layout.preferredWidth: 100
-            text: "Negentropy summary"
-            color: "#FFFFFF"
+            Layout.preferredWidth: 150
+            text: "<b>Negentropy summary</b>"
+            color: "#CCCCCC"
         }
         Text {
             Layout.row: 0
             Layout.column: 3
-            Layout.preferredWidth: 100
-            text: "Footprints"
-            color: "#FFFFFF"
+            Layout.preferredWidth: 150
+            text: "<b>Footprints</b>"
+            color: "#CCCCCC"
         }
         JuliaCanvas {
             id: viewport1
@@ -163,9 +176,15 @@ ApplicationWindow {
             second.value: 512
             first.onMoved: {
                 observables.cmin1 = first.value
+                if (sameContrastCheckbox.checked) {
+                    observables.cmin2 = first.value
+                }
             }
             second.onMoved: {
                 observables.cmax1 = second.value
+                if (sameContrastCheckbox.checked) {
+                    observables.cmax2 = second.value
+                }
             }
             Layout.row: 2
             Layout.column: 0
@@ -212,6 +231,7 @@ ApplicationWindow {
             }
             Layout.row: 2
             Layout.column: 1
+            visible: !sameContrastCheckbox.checked
         }
         JuliaCanvas {
             id: viewport3
@@ -389,14 +409,30 @@ ApplicationWindow {
   }
 
   FileDialog {
-    id: fileDialog
+    id: openVideoDialog
     title: "Open video"
     folder: shortcuts.home
     selectMultiple: false
     selectExisting: true
     selectFolder: false
     onAccepted: {
-        Julia.openvideo(fileDialog.fileUrl)
+        Julia.openvideo(openVideoDialog.fileUrl)
+    }
+    //onRejected: {
+    //    console.log("Canceled")
+    //}
+    //Component.onCompleted: visible = true
+  }
+
+  FileDialog {
+    id: saveResultDialog
+    title: "Save results"
+    folder: shortcuts.home
+    selectMultiple: false
+    selectExisting: false
+    selectFolder: false
+    onAccepted: {
+        Julia.saveresult(saveResultDialog.fileUrl)
     }
     //onRejected: {
     //    console.log("Canceled")
