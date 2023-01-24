@@ -13,10 +13,14 @@ function canvas_func(f::Function)
                         (Array{UInt32,1}, Int32, Int32))
 end
 
-function video_canvas(frame::Observable, cmin, cmax, cmap=:grays)
+function video_canvas(frame::Observable, cmin, cmax, xmin, xmax, ymin, ymax, cmap=:grays)
     colorscheme = ColorSchemes.colorschemes[cmap]
     function update_canvas(buffer)
-        f = Images.imresize(frame[], size(buffer))
+        x1 = clamp(xmin[], 1, size(frame[], 1)-5)
+        x2 = clamp(xmax[], x1+5, size(frame[], 1))
+        y1 = clamp(ymin[], 1, size(frame[], 2)-5)
+        y2 = clamp(ymax[], y1+5, size(frame[], 2))
+        f = Images.imresize(view(frame[], x1:x2, y1:y2), size(buffer))
         range = clamp(cmax[] - cmin[], 1e-10, Inf)
         for ind in eachindex(buffer)
             pixel = f[ind]
@@ -31,10 +35,14 @@ function video_canvas(frame::Observable, cmin, cmax, cmap=:grays)
     return canvas_func(update_canvas)
 end
 
-function video_canvas_raw(frame::Observable)
+function video_canvas_raw(frame::Observable, xmin, xmax, ymin, ymax)
     @assert eltype(frame) == Matrix{Colors.ARGB32}
     function update_canvas(buffer)
-        buffer .= Images.imresize(frame[], size(buffer))
+        x1 = clamp(xmin[], 1, size(frame[], 1)-5)
+        x2 = clamp(xmax[], x1+5, size(frame[], 1))
+        y1 = clamp(ymin[], 1, size(frame[], 2)-5)
+        y2 = clamp(ymax[], y1+5, size(frame[], 2))
+        buffer .= Images.imresize(view(frame[], x1:x2, y1:y2), size(buffer))
     end
     return canvas_func(update_canvas)
 end

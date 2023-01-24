@@ -36,9 +36,9 @@ function init_observables()
     observables["status_text"] = Observable("Starting worker process...")
     observables["status_progress"] = Observable(-1.0)
     observables["xmin"] = Observable(1)
-    observables["xmax"] = Observable(5)
+    observables["xmax"] = Observable(100)
     observables["ymin"] = Observable(1)
-    observables["ymax"] = Observable(5)
+    observables["ymax"] = Observable(100)
     on(observables["frame_n"]) do f
         send_request(conn, :rawframe, f)
         send_request(conn, :reconstructedframe, f)
@@ -95,12 +95,14 @@ function run_gui()
     @qmlfunction updatefootprints
     @qmlfunction mergecells
     @qmlfunction footprintclick
+    @qmlfunction zoomscroll
+    @qmlfunction pandrag
     observables = init_observables()
     QML.loadqml("qt_gui/gui.qml",
-        paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"]),
-        paint_cfunction2 = video_canvas(rec_frame, observables["cmin2"], observables["cmax2"]),
-        paint_cfunction3 = video_canvas(init_frame, observables["cmin3"], observables["cmax3"], :inferno),
-        paint_cfunction4 = video_canvas_raw(footprints_frame),
+        paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
+        paint_cfunction2 = video_canvas(rec_frame, observables["cmin2"], observables["cmax2"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
+        paint_cfunction3 = video_canvas(init_frame, observables["cmin3"], observables["cmax3"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"], :inferno),
+        paint_cfunction4 = video_canvas_raw(footprints_frame, observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
         timer = QTimer(),
         observables = observables
     )

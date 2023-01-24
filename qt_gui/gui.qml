@@ -106,6 +106,23 @@ ApplicationWindow {
             Layout.maximumHeight: width
             Layout.row: 0
             Layout.column: 0
+            MouseArea {
+                anchors.fill: parent
+                property int lastX
+                property int lastY
+                onWheel: (mouse) => {
+                    Julia.zoomscroll(mouse.x/width, mouse.y/height, mouse.angleDelta.y/8, observables)
+                }
+                onPressed: (mouse) => {
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+                onPositionChanged: (mouse) => {
+                    Julia.pandrag((mouse.x - lastX)/width, (mouse.y - lastY)/height, observables)
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+            }
         }
         RangeSlider {
             Layout.fillWidth: true
@@ -132,6 +149,23 @@ ApplicationWindow {
             Layout.maximumHeight: width
             Layout.row: 0
             Layout.column: 1
+            MouseArea {
+                anchors.fill: parent
+                property int lastX
+                property int lastY
+                onWheel: (mouse) => {
+                    Julia.zoomscroll(mouse.x/width, mouse.y/height, mouse.angleDelta.y/8, observables)
+                }
+                onPressed: (mouse) => {
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+                onPositionChanged: (mouse) => {
+                    Julia.pandrag((mouse.x - lastX)/width, (mouse.y - lastY)/height, observables)
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+            }
         }
         RangeSlider {
             Layout.fillWidth: true
@@ -158,6 +192,23 @@ ApplicationWindow {
             Layout.maximumHeight: width
             Layout.row: 0
             Layout.column: 2
+            MouseArea {
+                anchors.fill: parent
+                property int lastX
+                property int lastY
+                onWheel: (mouse) => {
+                    Julia.zoomscroll(mouse.x/width, mouse.y/height, mouse.angleDelta.y/8, observables)
+                }
+                onPressed: (mouse) => {
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+                onPositionChanged: (mouse) => {
+                    Julia.pandrag((mouse.x - lastX)/width, (mouse.y - lastY)/height, observables)
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+            }
         }
         RangeSlider {
             Layout.fillWidth: true
@@ -186,8 +237,22 @@ ApplicationWindow {
             Layout.maximumHeight: width
             MouseArea {
                 anchors.fill: parent
-                onClicked: (mouse) => {
+                property int lastX
+                property int lastY
+                onReleased: (mouse) => {
                     Julia.footprintclick(mouse.x/width, mouse.y/height, observables)
+                }
+                onWheel: (mouse) => {
+                    Julia.zoomscroll(mouse.x/width, mouse.y/height, mouse.angleDelta.y/8, observables)
+                }
+                onPressed: (mouse) => {
+                    lastX = mouse.x
+                    lastY = mouse.y
+                }
+                onPositionChanged: (mouse) => {
+                    Julia.pandrag((mouse.x - lastX)/width, (mouse.y - lastY)/height, observables)
+                    lastX = mouse.x
+                    lastY = mouse.y
                 }
             }
             Layout.row: 0
