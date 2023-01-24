@@ -1,13 +1,26 @@
 function handle_response(response_type::Symbol, data, observables)
-    if response_type == :rawframe
+    if response_type == :videoloaded
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
+        send_request(conn, :initframe)
+        send_request(conn, :footprints)
+    elseif response_type == :framesize
+        w, h = data
+        observables["xmin"][] = 1
+        observables["xmax"][] = w
+        observables["ymin"][] = 1
+        observables["ymax"][] = h
+    elseif response_type == :rawframe
         raw_frame[] = data
     elseif response_type == :reconstructedframe
         rec_frame[] = data
     elseif response_type == :initframe
         init_frame[] = data
-        data_min, data_max = extrema(view(data, isfinite.(data)))
-        observables["cmin3"][] = data_min
-        observables["cmax3"][] = data_max
+        mask = isfinite.(data)
+        if any(mask)
+            data_min, data_max = extrema(view(data, mask))
+            observables["cmin3"][] = data_min
+            observables["cmax3"][] = data_max
+        end
     elseif response_type == :footprints
         img, peaks = data
         footprints_frame[] = Colors.ARGB32.(img)

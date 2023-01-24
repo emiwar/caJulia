@@ -4,7 +4,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.0
 import QtQuick.Dialogs 1.0
 import org.julialang 1.0
-//import QtQuick.Controls.Material 2.12
+import QtQuick.Controls.Material 2.15
 
 ApplicationWindow {
   title: "Calcium Trace Extraction with Julia"
@@ -12,7 +12,8 @@ ApplicationWindow {
   height: 512
   visible: true
   //applicationName: "CaJulia"
-  //Material.theme: Material.Dark
+  Material.theme: Material.Dark
+  //Material.accent: Material.Purple
   Connections {
         target: timer
         onTimeout: Julia.checkworkerstatus(observables)
@@ -68,6 +69,7 @@ ApplicationWindow {
         Text {
             id: footerStatus
             text: observables.status_text
+            color: "#FFFFFF"
         }
         RowLayout {
             spacing: 6
@@ -79,6 +81,7 @@ ApplicationWindow {
             Text {
                 id: footerStatusProgressBarLabel
                 text: (100*observables.status_progress).toPrecision(3)+"%"
+                color: "#FFFFFF"
             }
             visible: observables.status_progress >= 0.0
         }
@@ -95,7 +98,35 @@ ApplicationWindow {
         Layout.preferredHeight: 50
         Layout.fillWidth: true
         columns: 4
-        rows: 2
+        rows: 3
+        Text {
+            Layout.row: 0
+            Layout.column: 0
+            Layout.preferredWidth: 100
+            text: "Raw video"
+            color: "#FFFFFF"
+        }
+        Text {
+            Layout.row: 0
+            Layout.column: 1
+            Layout.preferredWidth: 100
+            text: "Reconstructed video"
+            color: "#FFFFFF"
+        }
+        Text {
+            Layout.row: 0
+            Layout.column: 2
+            Layout.preferredWidth: 100
+            text: "Negentropy summary"
+            color: "#FFFFFF"
+        }
+        Text {
+            Layout.row: 0
+            Layout.column: 3
+            Layout.preferredWidth: 100
+            text: "Footprints"
+            color: "#FFFFFF"
+        }
         JuliaCanvas {
             id: viewport1
             paintFunction: paint_cfunction1
@@ -104,7 +135,7 @@ ApplicationWindow {
             Layout.minimumWidth: 50
             Layout.minimumHeight: width
             Layout.maximumHeight: width
-            Layout.row: 0
+            Layout.row: 1
             Layout.column: 0
             MouseArea {
                 anchors.fill: parent
@@ -136,7 +167,7 @@ ApplicationWindow {
             second.onMoved: {
                 observables.cmax1 = second.value
             }
-            Layout.row: 1
+            Layout.row: 2
             Layout.column: 0
         }
         JuliaCanvas {
@@ -147,7 +178,7 @@ ApplicationWindow {
             Layout.minimumWidth: 50
             Layout.minimumHeight: width
             Layout.maximumHeight: width
-            Layout.row: 0
+            Layout.row: 1
             Layout.column: 1
             MouseArea {
                 anchors.fill: parent
@@ -179,7 +210,7 @@ ApplicationWindow {
             second.onMoved: {
                 observables.cmax2 = second.value
             }
-            Layout.row: 1
+            Layout.row: 2
             Layout.column: 1
         }
         JuliaCanvas {
@@ -190,7 +221,7 @@ ApplicationWindow {
             Layout.minimumWidth: 50
             Layout.minimumHeight: width
             Layout.maximumHeight: width
-            Layout.row: 0
+            Layout.row: 1
             Layout.column: 2
             MouseArea {
                 anchors.fill: parent
@@ -223,7 +254,7 @@ ApplicationWindow {
             second.onMoved: {
                 observables.cmax3 = second.value
             }
-            Layout.row: 1
+            Layout.row: 2
             Layout.column: 2
         }
         
@@ -255,7 +286,7 @@ ApplicationWindow {
                     lastY = mouse.y
                 }
             }
-            Layout.row: 0
+            Layout.row: 1
             Layout.column: 3
         }
     }
@@ -273,6 +304,9 @@ ApplicationWindow {
             var ctx = getContext( "2d" );
             ctx.save();
             ctx.clearRect( 0, 0, width, height);
+            ctx.rect(0, 0, width, height);
+            ctx.fillStyle = "#555555"
+            ctx.fill()
             for(var trace_id=0; trace_id<2; trace_id += 1) {
                 var y = observables["trace"+("RCS"[trace_id])]
                 var x_max = y.length-1, y_max=1.5
@@ -317,6 +351,7 @@ ApplicationWindow {
         Text {
             id: timeSliderLabel
             text: ""+observables.frame_n
+            color: "#FFFFFF"
         }
         Button {
             id: stepBackButton

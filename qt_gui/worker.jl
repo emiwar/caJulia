@@ -89,6 +89,8 @@ function processrequest(requesttype, data, status, responses, workerstate)
     elseif requesttype == :initframe
         frame = reshape(Array(log10.(solution.I)), solution.frame_size)
         put!(responses, (:initframe, frame))
+    elseif requesttype == :footprints
+        send_footprints(workerstate, status, responses)
     elseif requesttype == :trace
         cellid = Int(data)
         S = workerstate.solution.S

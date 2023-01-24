@@ -46,7 +46,7 @@ function footprintclick(rel_x, rel_y, observables)
     x = clamp(Int(round(xmin + rel_x*(xmax - xmin))), 1, w)
     y = clamp(Int(round(ymin + rel_y*(ymax - ymin))), 1, h)
     cell_id = footprints_peaks[][x, y]
-    println("Clicked on $cell_id at ($x, $y)")
+    println("Clicked on cell #$cell_id at ($x, $y)")
     observables["traceS"][] = zero(observables["traceS"][])
     observables["traceC"][] = zero(observables["traceC"][])
     observables["traceR"][] = zero(observables["traceR"][])
@@ -75,7 +75,6 @@ function zoomscroll(rel_x, rel_y, delta, observables)
         observables["xmax"][] = xmax
         observables["ymin"][] = ymin
         observables["ymax"][] = ymax
-        println("Zoomed to ($xmin, $xmax; $ymin, $ymax)")
     end
 end
 
@@ -98,6 +97,5 @@ function pandrag(rel_x, rel_y, observables)
         observables["xmax"][] = xmax
         observables["ymin"][] = ymin
         observables["ymax"][] = ymax
-        println("Panned to ($xmin, $xmax; $ymin, $ymax)")
     end
 end
