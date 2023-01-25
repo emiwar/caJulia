@@ -109,3 +109,45 @@ function pandrag(rel_x, rel_y, observables)
         observables["ymax"][] = ymax
     end
 end
+
+
+function zoomscrolltrace(rel_x, rel_y, delta, observables)
+    T = observables["n_frames"][]
+    tmin = observables["tmin"][]
+    tmax = observables["tmax"][]
+    tmin += rel_x*delta * (tmax - tmin) / 100
+    tmax -= (1-rel_x)*delta * (tmax - tmin) / 100
+    tmin = Int(round(tmin))
+    tmax = Int(round(tmax))
+    if tmin < 1
+        tmin = 1
+    end
+    if tmax <= tmin + 50
+        if observables["tmax"][] > observables["tmin"][] + 50
+            tmax = observables["tmax"][]
+            tmin = observables["tmin"][]
+        else
+            tmax = tmin + 50
+        end
+    end
+    if tmax > T
+        tmax = T
+    end
+    observables["tmin"][] = tmin
+    observables["tmax"][] = tmax
+ 
+end
+
+function pandragtrace(rel_x, rel_y, observables)
+    T = observables["n_frames"][]
+    tmin = observables["tmin"][]
+    tmax = observables["tmax"][]
+    tmin -= rel_x * (tmax - tmin)
+    tmax -= rel_x * (tmax - tmin)
+    tmin = Int(round(tmin))
+    tmax = Int(round(tmax))
+    if tmin >= 1 && tmax >= tmin + 50 && tmax <= T
+        observables["tmin"][] = tmin
+        observables["tmax"][] = tmax
+    end
+end

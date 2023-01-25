@@ -29,7 +29,8 @@ function handle_response(response_type::Symbol, data, observables)
         send_request(conn, :reconstructedframe, observables["frame_n"][])
     elseif response_type == :nframes
         observables["n_frames"][] = data
-        println("nframes = $data")
+        observables["tmin"][] = 1
+        observables["tmax"][] = data
     elseif response_type == :trace
         traceS, traceC, traceR, col = data
         yscale = max(maximum(traceR), maximum(traceC))

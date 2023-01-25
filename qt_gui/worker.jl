@@ -69,8 +69,11 @@ function processrequest(requesttype, data, status, responses, workerstate)
     elseif requesttype == :killworker
         put!(responses, (:killingworker, nothing))
         exit()
+    elseif requesttype == :refreshvideo
+        put!(responses, (:nframes, VideoLoaders.nframes(videoloader)))
+        put!(responses, (:framesize, VideoLoaders.framesize(videoloader)))
     elseif requesttype == :rawframe
-        frameno = data
+        frameno = Int(data)
         put!(status, ("Loading frame $frameno", -1.0))
         if VideoLoaders.location(videoloader) == :device
             frame = VideoLoaders.readframe(videoloader.source_loader, frameno)::Matrix{Int16} 
@@ -80,12 +83,16 @@ function processrequest(requesttype, data, status, responses, workerstate)
         put!(responses, (:rawframe, frame))
         put!(status, ("Loaded frame $frameno", 1.0))
     elseif requesttype == :reconstructedframe
-        frameno = data
-        put!(status, ("Reconstructing frame $frameno", -1.0))
-        frame_device = reconstruct_frame(solution, frameno, videoloader)
-        frame = reshape(Array(frame_device), framesize(videoloader))
-        put!(responses, (:reconstructedframe, frame))
-        put!(status, ("Reconstructed frame $frameno", 1.0))
+        frameno = Int(data)
+        if frameno >= 1 && frameno <= nframes(videoloader)
+            put!(status, ("Reconstructing frame $frameno", -1.0))
+            frame_device = reconstruct_frame(solution, frameno, videoloader)
+            frame = reshape(Array(frame_device), framesize(videoloader))
+            put!(responses, (:reconstructedframe, frame))
+            put!(status, ("Reconstructed frame $frameno", 1.0))
+        else
+            put!(status, ("Invalid frame no $frameno", -1.0))
+        end
     elseif requesttype == :initframe
         frame = reshape(Array(log10.(solution.I)), solution.frame_size)
         put!(responses, (:initframe, frame))

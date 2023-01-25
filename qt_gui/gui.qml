@@ -22,7 +22,7 @@ ApplicationWindow {
   menuBar: MenuBar {
     Menu {
         title: qsTr("File")
-        Action { 
+        Action {
             text: qsTr("Open video") 
             onTriggered: openVideoDialog.visible = true;
         }
@@ -322,50 +322,87 @@ ApplicationWindow {
         antialiasing: true
         onPaint: {
             var ctx = getContext( "2d" );
-            ctx.save();
+            //ctx.save();
             ctx.clearRect( 0, 0, width, height);
             ctx.rect(0, 0, width, height);
             ctx.fillStyle = "#555555"
             ctx.fill()
             for(var trace_id=0; trace_id<2; trace_id += 1) {
                 var y = observables["trace"+("RCS"[trace_id])]
-                var x_max = y.length-1, y_max=1.5
+                var tmin = Math.max(observables["tmin"], 1)
+                var tmax = Math.min(y.length, observables["tmax"])
+                var y_max = 1.5
                 if(trace_id == 1) {
                     ctx.strokeStyle = observables["traceCol"]
                 } else {
                     ctx.strokeStyle = "#AAAAAA"
                 }
                 ctx.beginPath()
-                ctx.moveTo(0, (1-(y[0]+.4)/y_max)*height)
-                for(var i=1; i<y.length; i+=1) {
-                    ctx.lineTo(i*width/x_max, (1-((y[i]+.4))/y_max)*height)
+                ctx.moveTo(0, (1-(y[tmin-1]+.4)/y_max)*height)
+                for(var i=tmin; i<tmax; i+=1) {
+                    ctx.lineTo((i-tmin)*width/(tmax-tmin), (1-((y[i]+.4))/y_max)*height)
                 }
                 ctx.stroke()
             }
-            ctx.restore()
-            //context.strokeStyle = Qt.rgba(.4,.6,.8)
-            //context.path = myPath
-            //context.stroke()
+            //Draw line at current time
+            ctx.strokeStyle = "#749be8"
+            ctx.fillStyle = "#749be8"
+            var n_frames = observables["n_frames"]
+            var tmin = observables["tmin"]
+            var tmax = Math.min(n_frames, observables["tmax"])
+            var frame_n = observables["frame_n"]
+            var x = (frame_n - tmin)/(tmax - tmin) * width
+            var arrowwidth = 8
+            ctx.beginPath()
+            ctx.moveTo(x, arrowwidth*2)
+            ctx.lineTo(x-arrowwidth, arrowwidth*0.5)
+            ctx.lineTo(x, 0)
+            ctx.lineTo(x+arrowwidth, arrowwidth*0.5)
+            ctx.lineTo(x, arrowwidth*2)
+            ctx.lineTo(x, height)
+            
+            ctx.fill()
+            ctx.stroke()
+            //ctx.restore()
+        }
+        MouseArea {
+            anchors.fill: parent
+            property int lastX
+            property int lastY
+            onReleased: (mouse) => {
+                var n_frames = parseInt(observables["n_frames"])
+                var tmin = parseInt(observables["tmin"])
+                var tmax = Math.min(n_frames, observables["tmax"])
+                var rel_x = mouse.x/width
+                var t = (tmin + rel_x*(tmax - tmin))/n_frames
+                console.log(rel_x*(tmax-tmin), tmin, tmin + rel_x*(tmax - tmin),
+                            n_frames, t)
+                time_slider.value = t
+            }
+            onWheel: (mouse) => {
+                Julia.zoomscrolltrace(mouse.x/width, mouse.y/height, mouse.angleDelta.y/8, observables)
+            }
+            onPressed: (mouse) => {
+                lastX = mouse.x
+                lastY = mouse.y
+            }
+            onPositionChanged: (mouse) => {
+                Julia.pandragtrace((mouse.x - lastX)/width, (mouse.y - lastY)/height, observables)
+                lastX = mouse.x
+                lastY = mouse.y
+            }
         }
     }
 
-    //}
     RowLayout {
         Slider {
             id: time_slider
             value: 0.0
-            //from: 1
-            //to: observables.n_frames
-            //step: 1
-            //snapMode: Slider.SnapAlways
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.minimumWidth: 100
-            //Layout.minimumHeight: 100
             onValueChanged: {
                 observables.frame_n_float = value;
-                //viewport1.update();
-                //viewport2.update();
             }
         }
         Text {

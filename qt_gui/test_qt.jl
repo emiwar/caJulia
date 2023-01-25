@@ -32,7 +32,7 @@ end
 
 function init_observables()
     observables = JuliaPropertyMap()
-    observables["frame_n_float"] = Observable(1.0)
+    observables["frame_n_float"] = Observable(0.0)
     observables["n_frames"] = Observable{Int}(1)
     observables["frame_n"] = map((tf, N)->Int(clamp(round(tf*N), 1, N)),
                             observables["frame_n_float"],
@@ -68,9 +68,14 @@ function init_observables()
     observables["traceC"] = Observable(zeros(Float32, 10))
     observables["traceR"] = Observable(zeros(Float32, 10))
     observables["traceCol"] = Observable("#000000")
+    observables["tmin"] = Observable(0)
+    observables["tmax"] = Observable(1)
     on((_)->(@emit updateDisplay(5)), observables["traceS"])
     on((_)->(@emit updateDisplay(5)), observables["traceC"])
     on((_)->(@emit updateDisplay(5)), observables["traceR"])
+    on((_)->(@emit updateDisplay(5)), observables["frame_n_float"])
+    on((_)->(@emit updateDisplay(5)), observables["tmin"])
+    on((_)->(@emit updateDisplay(5)), observables["tmax"])
     return observables
 end
 
@@ -102,6 +107,8 @@ function run_gui()
     @qmlfunction footprintclick
     @qmlfunction zoomscroll
     @qmlfunction pandrag
+    @qmlfunction zoomscrolltrace
+    @qmlfunction pandragtrace
     observables = init_observables()
     QML.loadqml("qt_gui/gui.qml",
         paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
@@ -116,3 +123,4 @@ function run_gui()
     return observables
 end
 obs = run_gui();
+send_request(conn, :refreshvideo)
