@@ -124,3 +124,9 @@ function run_gui()
 end
 obs = run_gui();
 send_request(conn, :refreshvideo)
+
+
+
+
+
+#ex_video = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1/1st batch oct 2021/Inscopix/oprm1_learn_day2/recording_20211017_154731.hdf5";

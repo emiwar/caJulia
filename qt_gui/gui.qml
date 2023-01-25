@@ -171,8 +171,8 @@ ApplicationWindow {
         RangeSlider {
             Layout.fillWidth: true
             id: viewport1ContrastSlider
-            from: 1
-            to: 512
+            from: 128
+            to: 1024
             second.value: 512
             first.onMoved: {
                 observables.cmin1 = first.value
@@ -220,8 +220,8 @@ ApplicationWindow {
         RangeSlider {
             Layout.fillWidth: true
             id: viewport2ContrastSlider
-            from: 1
-            to: 512
+            from: 128
+            to: 1024
             second.value: 512
             first.onMoved: {
                 observables.cmin2 = first.value
@@ -375,8 +375,6 @@ ApplicationWindow {
                 var tmax = Math.min(n_frames, observables["tmax"])
                 var rel_x = mouse.x/width
                 var t = (tmin + rel_x*(tmax - tmin))/n_frames
-                console.log(rel_x*(tmax-tmin), tmin, tmin + rel_x*(tmax - tmin),
-                            n_frames, t)
                 time_slider.value = t
             }
             onWheel: (mouse) => {
@@ -412,7 +410,7 @@ ApplicationWindow {
         }
         Button {
             id: stepBackButton
-            text: "🡠"
+            text: "<|"
             Layout.preferredWidth: height
             onClicked: {
                 observables.frame_n_float -= 1.0/observables.n_frames
@@ -420,7 +418,7 @@ ApplicationWindow {
         }
         Button {
             id: stepForwardButton
-            text: "🡢"
+            text: "|>"
             Layout.preferredWidth: height
             onClicked: {
                 observables.frame_n_float += 1.0/observables.n_frames
@@ -428,7 +426,7 @@ ApplicationWindow {
         }
         Button {
             id: playButton
-            text: "⏵"
+            text: ">"
             Layout.preferredWidth: height
         }
     }

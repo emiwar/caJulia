@@ -9,6 +9,8 @@ function handle_response(response_type::Symbol, data, observables)
         observables["xmax"][] = w
         observables["ymin"][] = 1
         observables["ymax"][] = h
+    elseif response_type == :initbackgrounds
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
     elseif response_type == :rawframe
         raw_frame[] = data
     elseif response_type == :reconstructedframe

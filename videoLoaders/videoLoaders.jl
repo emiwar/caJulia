@@ -33,7 +33,7 @@ function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2
     return res
 end
 
-function openvideo(s::String; nsplits=5, hostCacheSize=3.2e10,
+function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
                               deviceCacheSize=1.0e10)
     if !isfile(s)
         #TODO: show error message
@@ -41,7 +41,7 @@ function openvideo(s::String; nsplits=5, hostCacheSize=3.2e10,
     end
     if endswith(s, ".nwb")
         baseloader = NWBLoader(s)
-    elseif endswith(s, ".hdf")
+    elseif endswith(s, ".hdf5")
         baseloader = HDFLoader(s, "images")
     else
         #TODO: show error message

@@ -42,7 +42,7 @@ function work(jobs, status, responses)
         listenforjobs(jobs, status, responses, jobqueue, workerstate)
         while !isempty(jobqueue)
             jobtype, jobdata = dequeue!(jobqueue)
-            processjob(jobtype, jobdata, status, responses, workerstate)
+            processjob(jobtype, jobdata, jobs, status, responses, jobqueue, workerstate)
             listenforjobs(jobs, status, responses, jobqueue, workerstate)
         end
         wait(jobs)
@@ -76,9 +76,9 @@ function processrequest(requesttype, data, status, responses, workerstate)
         frameno = Int(data)
         put!(status, ("Loading frame $frameno", -1.0))
         if VideoLoaders.location(videoloader) == :device
-            frame = VideoLoaders.readframe(videoloader.source_loader, frameno)::Matrix{Int16} 
+            frame = VideoLoaders.readframe(videoloader.source_loader, frameno)#::Matrix{Int16} 
         else
-            frame = VideoLoaders.readframe(videoloader, frameno)::Matrix{Int16} 
+            frame = VideoLoaders.readframe(videoloader, frameno)#::Matrix{Int16} 
         end
         put!(responses, (:rawframe, frame))
         put!(status, ("Loaded frame $frameno", 1.0))
@@ -115,16 +115,17 @@ function processrequest(requesttype, data, status, responses, workerstate)
     end
 end
 
-function processjob(jobtype, data, status, responses, workerstate)
+function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstate)
     videoloader = workerstate.videoloader
     solution = workerstate.solution
     function callback(label, i, N)
         put!(status, (label, i/N))
+        listenforjobs(jobs, status, responses, jobqueue, workerstate)
     end
     if jobtype == :loadvideo
         filename = data
         put!(status, ("Loading $filename", -1.0))
-        workerstate.videoloader = VideoLoaders.openvideo(filename)
+        workerstate.videoloader = VideoLoaders.openvideo(filename; nsplits=100)
         workerstate.solution = Sol(workerstate.videoloader)
         put!(responses, (:videoloaded, filename))
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
@@ -141,15 +142,17 @@ function processjob(jobtype, data, status, responses, workerstate)
             put!(status, ("Calculated init image", 1.0))
         end
     elseif jobtype == :initfootprints
-        put!(status, ("Initiating footprints", 0.0))
+        put!(status, ("Initializing footprints", 0.0))
         initA!(solution; callback)
-        put!(status, ("Initiated footprints.", 1.0))
+        put!(status, ("Initialized footprints.", 1.0))
         put!(status, ("Creating empty traces", 0.0))
         zeroTraces!(solution)
         send_footprints(workerstate, status, responses)
     elseif jobtype == :initbackgrounds
+        put!(status, ("Initializing backgrounds", 0.0))
         initBackgrounds!(videoloader, solution; callback)
-        #put!(status, ("Initiated backgrounds", 1.0))
+        put!(responses, (:initbackgrounds, nothing))
+        put!(status, ("Initialized backgrounds", 1.0))
     elseif jobtype == :updatetraces
         put!(status, ("Updating traces", 0.0))
         updateTraces!(videoloader, solution; deconvFcn! = oasis_opt!, callback)
