@@ -76,6 +76,7 @@ function init_observables()
     on((_)->(@emit updateDisplay(5)), observables["frame_n_float"])
     on((_)->(@emit updateDisplay(5)), observables["tmin"])
     on((_)->(@emit updateDisplay(5)), observables["tmax"])
+    observables["selected_cell"] = Observable(0)
     return observables
 end
 

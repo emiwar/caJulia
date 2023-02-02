@@ -43,6 +43,8 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
         baseloader = NWBLoader(s)
     elseif endswith(s, ".hdf5")
         baseloader = HDFLoader(s, "images")
+    elseif endswith(s, ".h5")
+        baseloader = HDFLoader(s, "data")
     else
         #TODO: show error message
         return EmptyLoader()

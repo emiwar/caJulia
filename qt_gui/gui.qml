@@ -345,8 +345,8 @@ ApplicationWindow {
                 ctx.stroke()
             }
             //Draw line at current time
-            ctx.strokeStyle = "#749be8"
-            ctx.fillStyle = "#749be8"
+            ctx.strokeStyle = Material.accent//"#749be8"
+            ctx.fillStyle = Material.accent//"#749be8"
             var n_frames = observables["n_frames"]
             var tmin = observables["tmin"]
             var tmax = Math.min(n_frames, observables["tmax"])
@@ -360,8 +360,40 @@ ApplicationWindow {
             ctx.lineTo(x+arrowwidth, arrowwidth*0.5)
             ctx.lineTo(x, arrowwidth*2)
             ctx.lineTo(x, height)
-            
             ctx.fill()
+            ctx.stroke()
+
+            //Draw time bar
+            var barwidth_frames = 5
+            var label = "250ms"
+            if ((tmax - tmin) > 30*60*20) {
+                barwidth_frames = 5*60*20
+                label = "5min"
+            } else if ((tmax - tmin) > 5*60*20) {
+                barwidth_frames = 60*20
+                label = "1min"
+            } else if ((tmax - tmin) > 2*60*20) {
+                barwidth_frames = 30*20
+                label = "30s"
+            } else if ((tmax - tmin) > 45*20) {
+                barwidth_frames = 10*20
+                label = "10s"
+            } else if ((tmax - tmin) > 20*20) {
+                barwidth_frames = 5*20
+                label = "5s"
+            } else if ((tmax - tmin) > 10*20) {
+                barwidth_frames = 1*20
+                label = "1s"
+            }
+            var barwidth = barwidth_frames / (tmax - tmin) * width
+            ctx.strokeStyle = "#000000"
+            ctx.fillStyle = "#000000"
+            ctx.beginPath()
+            ctx.moveTo(width-20, height-20)
+            ctx.lineTo(width-20-barwidth, height-20)
+            ctx.font = "14px serif"
+            ctx.textAlign = "center"
+            ctx.fillText(label, width -  20 - barwidth/2, height-5);
             ctx.stroke()
             //ctx.restore()
         }
@@ -410,24 +442,95 @@ ApplicationWindow {
         }
         Button {
             id: stepBackButton
-            text: "<|"
+            Layout.preferredHeight: 50
             Layout.preferredWidth: height
+            background: Canvas {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contextType: "2d"
+                antialiasing: true
+                onPaint: {
+                    var ctx = getContext( "2d" );
+                    ctx.clearRect( 0, 0, width, height);
+                    var rad = Math.min(width, height)/2
+                    ctx.arc(width/2, height/2, rad, 0, 2*Math.PI)
+                    ctx.fillStyle = "#555555"
+                    ctx.fill()
+                    ctx.beginPath()
+                    ctx.moveTo(width/2-rad/2, height/2)
+                    ctx.lineTo(width/2, height/2+rad/2.5)
+                    ctx.lineTo(width/2, height/2-rad/2.5)
+                    ctx.closePath()
+                    ctx.rect(width*0.58, height/2-rad/2.5, rad*0.08, rad/1.25)
+                    ctx.strokeStyle = Material.accent
+                    ctx.fillStyle = Material.accent
+                    ctx.fill()
+                    ctx.stroke()
+                }
+            }
             onClicked: {
                 observables.frame_n_float -= 1.0/observables.n_frames
             }
         }
         Button {
             id: stepForwardButton
-            text: "|>"
+            Layout.preferredHeight: 50
             Layout.preferredWidth: height
+            background: Canvas {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contextType: "2d"
+                antialiasing: true
+                onPaint: {
+                    var ctx = getContext( "2d" );
+                    ctx.clearRect( 0, 0, width, height);
+                    var rad = Math.min(width, height)/2
+                    ctx.arc(width/2, height/2, rad, 0, 2*Math.PI)
+                    ctx.fillStyle = "#555555"
+                    ctx.fill()
+                    ctx.beginPath()
+                    ctx.moveTo(width/2+rad/2, height/2)
+                    ctx.lineTo(width/2, height/2+rad/2.5)
+                    ctx.lineTo(width/2, height/2-rad/2.5)
+                    ctx.closePath()
+                    ctx.rect(width*0.4, height/2-rad/2.5, rad*0.08, rad/1.25)
+                    ctx.strokeStyle = Material.accent
+                    ctx.fillStyle = Material.accent
+                    ctx.fill()
+                    ctx.stroke()
+                }
+            }
             onClicked: {
                 observables.frame_n_float += 1.0/observables.n_frames
             }
         }
         Button {
             id: playButton
-            text: ">"
+            Layout.preferredHeight: 50
             Layout.preferredWidth: height
+            background: Canvas {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contextType: "2d"
+                antialiasing: true
+                onPaint: {
+                    var ctx = getContext( "2d" );
+                    ctx.clearRect( 0, 0, width, height);
+                    var rad = Math.min(width, height)/2
+                    ctx.arc(width/2, height/2, rad, 0, 2*Math.PI)
+                    ctx.fillStyle = "#555555"
+                    ctx.fill()
+                    ctx.beginPath()
+                    ctx.moveTo(width/2+rad/2, height/2)
+                    ctx.lineTo(width/2-rad/4, height/2+rad/2.5)
+                    ctx.lineTo(width/2-rad/4, height/2-rad/2.5)
+                    ctx.closePath()
+                    ctx.strokeStyle = Material.accent
+                    ctx.fillStyle = Material.accent
+                    ctx.fill()
+                    ctx.stroke()
+                }
+            }
         }
     }
   }

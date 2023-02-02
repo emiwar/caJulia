@@ -125,7 +125,7 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
     if jobtype == :loadvideo
         filename = data
         put!(status, ("Loading $filename", -1.0))
-        workerstate.videoloader = VideoLoaders.openvideo(filename; nsplits=100)
+        workerstate.videoloader = VideoLoaders.openvideo(filename; nsplits=50)
         workerstate.solution = Sol(workerstate.videoloader)
         put!(responses, (:videoloaded, filename))
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
@@ -156,6 +156,7 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
     elseif jobtype == :updatetraces
         put!(status, ("Updating traces", 0.0))
         updateTraces!(videoloader, solution; deconvFcn! = oasis_opt!, callback)
+        put!(responses, (:updatedtraces, nothing))
         put!(status, ("Updated traces", 1.0))
     elseif jobtype == :updatefootprints
         put!(status, ("Updating footprints", 0.0))

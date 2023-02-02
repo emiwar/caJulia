@@ -3,6 +3,11 @@ function handle_response(response_type::Symbol, data, observables)
         send_request(conn, :reconstructedframe, observables["frame_n"][])
         send_request(conn, :initframe)
         send_request(conn, :footprints)
+        observables["traceS"][] = zero(observables["traceS"][])
+        observables["traceC"][] = zero(observables["traceC"][])
+        observables["traceR"][] = zero(observables["traceR"][])
+        observables["traceCol"][] = "#000000"
+        observables["selected_cell"][] = 0
     elseif response_type == :framesize
         w, h = data
         observables["xmin"][] = 1
@@ -40,6 +45,11 @@ function handle_response(response_type::Symbol, data, observables)
         observables["traceC"][] = traceC ./ yscale
         observables["traceR"][] = traceR ./ yscale
         observables["traceCol"][] = "#"*Colors.hex(col)
+    elseif response_type == :updatedtraces
+        cell_id = observables["selected_cell"][] 
+        if cell_id > 0
+            send_request(conn, :trace, cell_id)
+        end
     else
         println("Unhandled response: $response_type")
     end

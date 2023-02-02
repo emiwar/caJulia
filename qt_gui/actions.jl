@@ -61,6 +61,7 @@ function footprintclick(rel_x, rel_y, observables)
     observables["traceC"][] = zero(observables["traceC"][])
     observables["traceR"][] = zero(observables["traceR"][])
     observables["traceCol"][] = "#000000"
+    observables["selected_cell"][] = cell_id
     if cell_id > 0
         send_request(conn, :trace, cell_id)
     end
