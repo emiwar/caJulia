@@ -69,4 +69,10 @@ function strongestAMap(A)
     peaks[Amax .== 0.0] .= 0
     return peaks
 end
-strongestAMap(sol::Sol) = reshape(strongestAMap(sol.A), sol.frame_size)
+function strongestAMap(sol::Sol) 
+    if ncells(sol) == 0
+        return zeros(Int, sol.frame_size)
+    else
+        return reshape(strongestAMap(sol.A), sol.frame_size)
+    end
+end
