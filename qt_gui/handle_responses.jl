@@ -1,5 +1,6 @@
 function handle_response(response_type::Symbol, data, observables)
     if response_type == :videoloaded
+        send_request(conn, :rawframe, observables["frame_n"][])
         send_request(conn, :reconstructedframe, observables["frame_n"][])
         send_request(conn, :initframe)
         send_request(conn, :footprints)
@@ -31,7 +32,6 @@ function handle_response(response_type::Symbol, data, observables)
     elseif response_type == :footprints
         img, peaks = data
         footprints_frame[] = Colors.ARGB32.(img)
-        #TODO: need to send per-pixel-id, not center-per-id
         footprints_peaks[] = peaks
         send_request(conn, :reconstructedframe, observables["frame_n"][])
     elseif response_type == :nframes
@@ -50,6 +50,9 @@ function handle_response(response_type::Symbol, data, observables)
         if cell_id > 0
             send_request(conn, :trace, cell_id)
         end
+    elseif response_type == :subtractedmin
+        send_request(conn, :raw, observables["frame_n"][])
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
     else
         println("Unhandled response: $response_type")
     end

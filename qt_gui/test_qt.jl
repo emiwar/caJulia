@@ -3,6 +3,8 @@ ENV["QT_QUICK_CONTROLS_STYLE"] = "Material"
 ENV["QT_QUICK_CONTROLS_MATERIAL_THEME"] = "Dark"
 ENV["QT_QUICK_CONTROLS_MATERIAL_VARIANT"] = "Dense"
 #ENV["QT_QUICK_CONTROLS_UNIVERSAL_VARIANT"] = "Dark"
+include("worker_connection.jl")
+conn = WorkerConnection()
 import CxxWrap
 using Images
 using Colors
@@ -11,11 +13,9 @@ using Observables
 using QML
 using Qt5QuickControls_jll
 using Qt5QuickControls2_jll
-include("worker_connection.jl")
 include("videoCanvas.jl")
 include("handle_responses.jl")
 include("actions.jl")
-
 
 function checkworkerstatus(observables)
     yield() #Appearently needed to refresh the channels
@@ -82,8 +82,8 @@ end
 
 const raw_frame = Observable(zeros(Int16, 100, 100));
 const rec_frame = Observable(zeros(Float32, 100, 100));
-const init_frame = Observable(zeros(Float32, 100, 100));
-const footprints_frame = Observable(ones(Colors.ARGB32, 100, 100));
+const init_frame = Observable(zeros(Float32, 100, 100) .* NaN);
+const footprints_frame = Observable(zeros(Colors.ARGB32, 100, 100));
 const footprints_peaks = Observable(zeros(Int, 100, 100));
 #function updateDisplays()
 #    @emit updateDisplay(1)
@@ -93,18 +93,20 @@ on((_)->(@emit updateDisplay(2)), rec_frame);
 on((_)->(@emit updateDisplay(3)), init_frame);
 on((_)->(@emit updateDisplay(4)), footprints_frame);
 
-conn = WorkerConnection()
+
 function run_gui()
     @qmlfunction openvideo
     @qmlfunction saveresult
     @qmlfunction checkworkerstatus
     @qmlfunction pingworker
+    @qmlfunction resetworker
     @qmlfunction calcinitframe
     @qmlfunction initfootprints
     @qmlfunction initbackgrounds
     @qmlfunction updatetraces
     @qmlfunction updatefootprints
     @qmlfunction mergecells
+    @qmlfunction subtractmin
     @qmlfunction footprintclick
     @qmlfunction zoomscroll
     @qmlfunction pandrag

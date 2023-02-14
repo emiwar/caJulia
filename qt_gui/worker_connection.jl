@@ -28,7 +28,40 @@ function startworker(jobs, status, responses)
             put!(status, ("Importing Colors", 0.4)); Base.eval(Main, :(import Colors))
             put!(status, ("Loading code", 0.5))
             include("qt_gui/worker.jl")
-            put!(status, ("Starting job queue", 0.7))
+        end
+        remotecall_fetch(proc_id, status) do status
+            vltype = VideoLoaders.CachedDeviceLoader{VideoLoaders.CachedHostLoader{
+                VideoLoaders.SplitLoader{VideoLoaders.HDFLoader{Int16}}, 
+                Int16}}
+            soltype = Sol{Tuple{PerVideoBackground, PerVideoRank1Background}}
+            put!(status, ("Compiling video loader", 0.7))
+            Base.eval(VideoLoaders, :(precompile(openvideo, (String,))))
+            Base.eval(VideoLoaders, :(precompile(readseg, ($vltype, Int64))))
+            Base.eval(VideoLoaders, :(precompile(readframe, ($vltype, Int64))))
+            Base.eval(VideoLoaders, :(precompile(optimalorder, ($vltype,))))
+            Base.eval(VideoLoaders, :(precompile(framesize, ($vltype,))))
+            Base.eval(VideoLoaders, :(precompile(nframes, ($vltype,))))
+
+            put!(status, ("Compiling solver", 0.8))
+            Base.eval(Main, :(precompile(Sol, ($vltype,))))
+            Base.eval(Main, :(precompile(reconstruct_frame, ($soltype, Int64, $vltype))))
+            Base.eval(Main, :(precompile(reconstruct_frame, ($soltype, Int64, VideoLoaders.EmptyLoader))))
+            Base.eval(Main, :(precompile(zeroTraces!, ($soltype,))))
+            Base.eval(Main, :(precompile(initBackgrounds!, ($vltype, $soltype))))
+            Base.eval(Main, :(precompile(updateTraces!, ($vltype, $soltype))))
+            Base.eval(Main, :(precompile(updateROIs!, ($vltype, $soltype))))
+            Base.eval(Main, :(precompile(roiImg, ($soltype,))))
+            Base.eval(Main, :(precompile(strongestAMap, ($soltype,))))
+            Base.eval(Main, :(precompile(Base.merge!, ($soltype,))))
+            Base.eval(Main, :(precompile(initA!, ($soltype,))))
+            Base.eval(Main, :(precompile(negentropy_img_per_video, ($vltype,))))
+            Base.eval(Main, :(precompile(oasis_opt!, ($soltype, Int64))))
+            put!(status, ("Compiling work method", 0.9))
+            work_args = (RemoteChannel{Channel{Tuple{Bool, Symbol, Any}}},
+                         RemoteChannel{Channel{Tuple{String, Float64}}},
+                         RemoteChannel{Channel{Tuple{Symbol, Any}}})
+            Base.eval(Main, :(precompile(work, $work_args)))
+            put!(status, ("Starting job queue", 0.95))
         end
         remotecall_fetch((j,s,r)->work(j,s,r), proc_id, jobs, status, responses)
     end)

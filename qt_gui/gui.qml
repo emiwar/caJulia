@@ -35,6 +35,10 @@ ApplicationWindow {
             onTriggered: Julia.pingworker();
         }
         Action { 
+            text: qsTr("Reset worker") 
+            onTriggered: Julia.resetworker();
+        }
+        Action { 
             text: qsTr("Quit") 
             onTriggered: Qt.quit();
         }
@@ -65,6 +69,10 @@ ApplicationWindow {
             text: qsTr("Merge cells") 
             onTriggered: Julia.mergecells();
         }
+        Action { 
+            text: qsTr("Subtract min") 
+            onTriggered: Julia.subtractmin();
+        }
     }
     Menu {
         title: qsTr("Settings")
@@ -73,6 +81,12 @@ ApplicationWindow {
             text: qsTr("Same contrast")
             checkable: true
             checked: false
+            onTriggered: {
+                if (sameContrastCheckbox.checked) {
+                    observables.cmin2 = observables.cmin1
+                    observables.cmax2 = observables.cmax1
+                }
+            }
         }
     }
   }
@@ -171,9 +185,9 @@ ApplicationWindow {
         RangeSlider {
             Layout.fillWidth: true
             id: viewport1ContrastSlider
-            from: 128
-            to: 1024
-            second.value: 512
+            from: 0
+            to: 512
+            second.value: 256
             first.onMoved: {
                 observables.cmin1 = first.value
                 if (sameContrastCheckbox.checked) {
@@ -220,9 +234,9 @@ ApplicationWindow {
         RangeSlider {
             Layout.fillWidth: true
             id: viewport2ContrastSlider
-            from: 128
-            to: 1024
-            second.value: 512
+            from: 0
+            to: 512
+            second.value: 256
             first.onMoved: {
                 observables.cmin2 = first.value
             }

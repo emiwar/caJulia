@@ -2,6 +2,7 @@ using Distributed
 using DataStructures
 import Statistics
 import CUDA
+import cuDNN
 import Images
 import SparseArrays
 import HDF5
@@ -74,14 +75,18 @@ function processrequest(requesttype, data, status, responses, workerstate)
         put!(responses, (:framesize, VideoLoaders.framesize(videoloader)))
     elseif requesttype == :rawframe
         frameno = Int(data)
-        put!(status, ("Loading frame $frameno", -1.0))
-        if VideoLoaders.location(videoloader) == :device
-            frame = VideoLoaders.readframe(videoloader.source_loader, frameno)#::Matrix{Int16} 
+        if frameno < 1 || frameno > VideoLoaders.nframes(videoloader)
+            put!(status, ("Invalid frame no $frameno", -1.0))
         else
-            frame = VideoLoaders.readframe(videoloader, frameno)#::Matrix{Int16} 
+            put!(status, ("Loading frame $frameno", -1.0))
+            if VideoLoaders.location(videoloader) == :device
+                frame = VideoLoaders.readframe(videoloader.source_loader, frameno)#::Matrix{Int16} 
+            else
+                frame = VideoLoaders.readframe(videoloader, frameno)#::Matrix{Int16} 
+            end
+            put!(responses, (:rawframe, frame))
+            put!(status, ("Loaded frame $frameno", 1.0))
         end
-        put!(responses, (:rawframe, frame))
-        put!(status, ("Loaded frame $frameno", 1.0))
     elseif requesttype == :reconstructedframe
         frameno = Int(data)
         if frameno >= 1 && frameno <= nframes(videoloader)
@@ -130,6 +135,7 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         put!(responses, (:videoloaded, filename))
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
         put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
+        GC.gc()
         put!(status, ("Loaded $filename", 1.0))
     elseif jobtype == :calcinitframe
         if VideoLoaders.location(videoloader) == :nowhere
@@ -168,11 +174,25 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         merge!(solution, thres=.6; callback)
         put!(status, ("Merged cells", 1.0))
         send_footprints(workerstate, status, responses)
+    elseif jobtype == :subtractmin
+        put!(status, ("Subtracting min", 0.0))
+        VideoLoaders.calcmin!(videoloader.source_loader; callback)
+        VideoLoaders.clear!(videoloader)
+        put!(responses, (:subtractedmin, nothing))
+        put!(status, ("Subtracted min", 1.0))
     elseif jobtype == :saveresult
         filename = data
         put!(status, ("Saving result to $filename", 0.0))
         to_hdf(filename, solution, videoloader)
         put!(status, ("Saved result to $filename", 1.0))
+    elseif jobtype == :reset
+        workerstate.videoloader = VideoLoaders.EmptyLoader()
+        workerstate.solution =  Sol(workerstate.videoloader)
+        send_footprints(workerstate, status, responses)
+        put!(responses, (:updatedtraces, nothing))
+        put!(responses, (:videoloaded, nothing))
+        put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
+        put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
     end
 end
 

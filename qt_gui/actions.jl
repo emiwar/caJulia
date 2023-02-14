@@ -23,6 +23,10 @@ function saveresult(Qfilename)
     submit_job(conn, :saveresult, filename)
 end
 
+function resetworker()
+    submit_job(conn, :reset)
+end
+
 function calcinitframe()
     submit_job(conn, :calcinitframe)
 end
@@ -45,6 +49,10 @@ end
 
 function mergecells()
     submit_job(conn, :mergecells)
+end
+
+function subtractmin()
+    submit_job(conn, :subtractmin)
 end
 
 function footprintclick(rel_x, rel_y, observables)
