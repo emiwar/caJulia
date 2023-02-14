@@ -6,7 +6,7 @@ function initA!(sol::Sol; threshold=2e-2, median_wnd=1, callback)
         projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
     end
     callback("Detecting peaks", 0, 1)
-    rois_list = segment_peaks_unionfind(projection)#segment_peaks(projection, threshold)
+    rois_list = segment_peaks_unionfind(projection; callback)#segment_peaks(projection, threshold)
     callback("Moving footprints to device", 0, 1)
     rois = SparseArrays.sparse(hcat(rois_list...)')
     callback("Moving footprints to device", 0.5, 1)
@@ -159,7 +159,7 @@ end
 
 
 
-function getparent(parents, i)
+function getparent(parents, i)::Int
     if i == 0
         return 0
     elseif parents[i] == i
@@ -169,14 +169,14 @@ function getparent(parents, i)
     end
 end
 
-function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000)
+function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000; callback=(_,_,_)->nothing)
     segmentation = zeros(Int64, size(I))
     sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
     parents = Int64[]
     sizes = Int64[]
 
     #Step 1: cluster all pixels
-    for coord in sorted_pixels
+    for (i, coord) in enumerate(sorted_pixels)
         neighbours = Int64[]
         for offs in [(0,1), (0,-1), (1,0), (-1,0)]
             offs_coord = coord + CartesianIndex(offs...)
@@ -206,7 +206,11 @@ function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000)
                 end
             end
         end
+        if i%500==0
+            callback("Processing pixels", i, length(sorted_pixels))
+        end
     end
+    callback("Assigning blob IDs", 0, 1)
     seg = map(segmentation) do i
         p = getparent(parents, i)
         (p==0 || sizes[p] < min_size) ? 0 : p
@@ -218,9 +222,12 @@ function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000)
     c_s = 0.0
     c_ss = 0.0
     c_n = 0
+    callback("Finding unique blobs", 0, 1)
     segs = unique(seg)
+    callback("Sorting by size", 0, 1)
+    #TODO: this can be _much_ more efficient
     segs = sort(segs, by=i->Statistics.mean(I[seg .== i] .^ 2))
-    for seg_id = segs
+    for (i, seg_id) = enumerate(segs)
         patch = I[seg .== seg_id]
         n = length(patch)
         keep = false
@@ -242,6 +249,7 @@ function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000)
             c_n += n
             #seg[seg .== seg_id] .= 0
         end
+        callback("Filtering detected blobs", i, length(segs))
     end
     return rois_list
 end

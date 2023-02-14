@@ -100,7 +100,7 @@ end
 function maskA(Ad, frame_size; growth=1)
     kernel = CUDA.ones(1+2*growth, 1+2*growth, 1, 1)
     A_reshaped = reshape(Float32.(Ad' .> 0.0), frame_size..., 1, size(Ad, 1));
-    conved = CUDA.CUDNN.cudnnConvolutionForward(kernel, A_reshaped; padding=growth)
+    conved = cuDNN.cudnnConvolutionForward(kernel, A_reshaped; padding=growth)
     Float32.(reshape(conved, size(Ad, 2), size(Ad, 1))' .> 0.0)
     # CUDA.CuArray(CUDA.CUSPARSE.CuSparseMatrixCSR)
 end

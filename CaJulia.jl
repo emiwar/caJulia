@@ -1,5 +1,6 @@
 import Statistics
 import CUDA
+import cuDNN
 import Images
 import SparseArrays
 import HDF5
@@ -34,15 +35,16 @@ example_files_huge = ["recording_20211016_163921.hdf5",
                       "recording_20220919_135612.hdf5"]
 #folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1"
 #folder *= "/1st batch oct 2021/Oprm1_cal_im_gCamp8_1221_dataanalysis/exported videos/"
-#nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files_huge[1], "images")
-nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[end])
-splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
+#nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files_huge[1],
+#                                   "images", (1:1440, 1:1080,  1:24000))
+nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[1])
+splitLoader = VideoLoaders.SplitLoader(nwbLoader, 50)
 #alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_animal3.csv", 10;
 #                                 pathPrefix = "../data/")
 hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
-#minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
-#VideoLoaders.calcmin!(minSubtr);
-deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.0e10)
+minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
+VideoLoaders.calcmin!(minSubtr)
+deviceCache = VideoLoaders.CachedDeviceLoader(minSubtr; max_memory=1.0e10)
 
 
 gui = GUI.GUIState(deviceCache);
@@ -56,13 +58,13 @@ GUI.updateTraces!(gui);
 GUI.updateFootprints!(gui);
 GUI.mergeCells!(gui);
 
-#sol = Sol(deviceCache);
-#sol.I = negentropy_img(deviceCache);
-sol = gui.sol[];
-initA!(sol);
+sol = Sol(deviceCache);
+sol.I = negentropy_img(deviceCache);
+#sol = gui.sol[];
+initA!(sol; callback=(_,_,_)->nothing);
 zeroTraces!(sol);
-initBackgrounds!(deviceCache, sol);
-updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!);
+initBackgrounds!(deviceCache, sol; callback=(_,_,_)->nothing);
+updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!; callback=(_,_,_)->nothing);
 
 for it = 3:6
     updateROIs!(deviceCache, sol);

@@ -16,9 +16,11 @@ function readseg(vl::SubtractMinLoader, i)
     return eltype(vl).(moved) .- vl.min
 end
 
-function calcmin!(vl::SubtractMinLoader)
+function calcmin!(vl::SubtractMinLoader; callback=(_,_,_)->nothing)
+    cb(i, N) = callback("Subtracting min", i, N)
     vl.min .= 0.0f0
-    vl.min .= view(mapreduce(x->x, min, vl, Inf32), :)
+    vl.min .= view(mapreduce(x->x, min, vl, Inf32; callback=cb), :)
+    nothing
 end
 
 location(::SubtractMinLoader) = :device
@@ -37,8 +39,8 @@ function readframe(vl::SubtractMinLoader, frame_idx)
     seg = readseg(vl.source_loader, seg_id)
     local_frame = frame_idx - first(framerange(vl, seg_id)) + 1
     if ndims(seg) == 3
-        return seg[:, :, local_frame] .- reshape(Array(vl.min), framesize(vl))
+        return seg[:, :, local_frame] .- reshape(eltype(seg).(Array(vl.min)), framesize(vl))
     elseif ndims(seg) == 2
-        return seg[:, local_frame] .- Array(vl.min)
+        return seg[:, local_frame] .- eltype(seg).(Array(vl.min))
     end
 end

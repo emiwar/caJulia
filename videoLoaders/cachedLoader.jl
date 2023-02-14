@@ -69,7 +69,9 @@ function readseg(vl::CachedLoader, i::Int64)
         seg_id = first(keys(vl.cache))
         available_memory += sizeof(vl.cache[seg_id])
         clearseg!(vl, seg_id)
-        GC.gc()
+        if i%3 == 0 #Hack to avoid over-allocating memory
+            GC.gc()
+        end
     end
     return vl.cache[i] = convertseg(vl, newseg)
 end

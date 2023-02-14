@@ -22,12 +22,15 @@ location(::EmptyLoader) = :nowhere
 frame2seg(::EmptyLoader, _) = 1
 video_idx(::EmptyLoader, _) = 1
 
-function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2)
+function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2,
+                        callback=(_,_)->nothing)
     dims == 2 || error("Only dims=2 is implemented for mapreduce")
     res = CUDA.fill(init, (prod(framesize(vl)), 1))
+    callback(0, nsegs(vl))
     @showprogress "mapreduce" for i = optimalorder(vl)
         seg = readseg(vl, i)
         res .= op.(res, CUDA.mapreduce(f, op, seg; init=init, dims=dims))
+        callback(i, nsegs(vl))
     end
     CUDA.synchronize()
     return res
@@ -42,7 +45,7 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     if endswith(s, ".nwb")
         baseloader = NWBLoader(s)
     elseif endswith(s, ".hdf5")
-        baseloader = HDFLoader(s, "images")
+        baseloader = HDFLoader(s, "images", (1:1440, 1:1080,  1:1000))
     elseif endswith(s, ".h5")
         baseloader = HDFLoader(s, "data")
     else
@@ -51,7 +54,8 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     end
     splitloader = SplitLoader(baseloader, nsplits)
     hostcache = CachedHostLoader(splitloader; max_memory=hostCacheSize)
-    devicecache = CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
+    minSubtr = VideoLoaders.SubtractMinLoader(hostcache)
+    devicecache = CachedDeviceLoader(minSubtr, max_memory=deviceCacheSize)
 end
 
 end
