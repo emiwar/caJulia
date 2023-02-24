@@ -11,7 +11,7 @@ packages = ["DataStructures",
             "Observables",
             "QML",
             "Qt5QuickControls_jll",
-            "Qt5QuickControls2_jll"]
+            "Qt5QuickControls2_jll"] #Maybe add DataFrames, CSV and ProgressMeter?
 
 built_in = ["SparseArrays", "Distributed", "Statistics"]
 PackageCompiler.create_sysimage(packages, sysimage_path="sysimage/custom_sys2.so",
