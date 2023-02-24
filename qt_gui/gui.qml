@@ -31,6 +31,10 @@ ApplicationWindow {
             onTriggered: saveResultDialog.visible = true;
         }
         Action { 
+            text: qsTr("Open behavior video") 
+            onTriggered: Julia.resetworker();
+        }
+        Action { 
             text: qsTr("Ping worker") 
             onTriggered: Julia.pingworker();
         }
@@ -124,7 +128,7 @@ ApplicationWindow {
     GridLayout {
         Layout.preferredHeight: 50
         Layout.fillWidth: true
-        columns: 4
+        columns: 5
         rows: 3
         Text {
             Layout.row: 0
@@ -152,6 +156,13 @@ ApplicationWindow {
             Layout.column: 3
             Layout.preferredWidth: 150
             text: "<b>Footprints</b>"
+            color: "#CCCCCC"
+        }
+        Text {
+            Layout.row: 0
+            Layout.column: 4
+            Layout.preferredWidth: 150
+            text: "<b>Behavior</b>"
             color: "#CCCCCC"
         }
         JuliaCanvas {
@@ -322,6 +333,18 @@ ApplicationWindow {
             }
             Layout.row: 1
             Layout.column: 3
+        }
+
+        JuliaCanvas {
+            id: viewport5
+            paintFunction: paint_cfunction5
+            Layout.fillWidth: true
+            Layout.preferredWidth: 300
+            Layout.minimumWidth: 50
+            Layout.minimumHeight: width
+            Layout.maximumHeight: width
+            Layout.row: 1
+            Layout.column: 4
         }
     }
     //Rectangle {
@@ -592,11 +615,28 @@ ApplicationWindow {
     //Component.onCompleted: visible = true
   }
 
+  FileDialog {
+    id: openBehaviorDialog
+    title: "Open behavior video"
+    folder: shortcuts.home
+    selectMultiple: false
+    selectExisting: true
+    selectFolder: false
+    onAccepted: {
+        Julia.openbehaviorvideo(openVideoDialog.fileUrl)
+    }
+    //onRejected: {
+    //    console.log("Canceled")
+    //}
+    //Component.onCompleted: visible = true
+  }
+
   Component.onCompleted: {
     viewport1.update()
     viewport2.update()
     viewport3.update()
     viewport4.update()
+    viewport5.update()
     timer.start();
   }
 }

@@ -85,6 +85,7 @@ const rec_frame = Observable(zeros(Float32, 100, 100));
 const init_frame = Observable(zeros(Float32, 100, 100) .* NaN);
 const footprints_frame = Observable(zeros(Colors.ARGB32, 100, 100));
 const footprints_peaks = Observable(zeros(Int, 100, 100));
+const behavior_frame = Observable(zeros(Colors.ARGB32, 100, 100));
 #function updateDisplays()
 #    @emit updateDisplay(1)
 #end
@@ -92,10 +93,12 @@ on((_)->(@emit updateDisplay(1)), raw_frame);
 on((_)->(@emit updateDisplay(2)), rec_frame);
 on((_)->(@emit updateDisplay(3)), init_frame);
 on((_)->(@emit updateDisplay(4)), footprints_frame);
+on((_)->(@emit updateDisplay(5)), behavior_frame);
 
 
 function run_gui()
     @qmlfunction openvideo
+    @qmlfunction openbehaviorvideo
     @qmlfunction saveresult
     @qmlfunction checkworkerstatus
     @qmlfunction pingworker
@@ -118,6 +121,7 @@ function run_gui()
         paint_cfunction2 = video_canvas(rec_frame, observables["cmin2"], observables["cmax2"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
         paint_cfunction3 = video_canvas(init_frame, observables["cmin3"], observables["cmax3"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"], :inferno),
         paint_cfunction4 = video_canvas_raw(footprints_frame, observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
+        paint_cfunction5 = video_canvas_raw(behavior_frame, Observable(0), Observable(100), Observable(0), Observable(100)),
         timer = QTimer(),
         observables = observables
     )

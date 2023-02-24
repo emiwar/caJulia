@@ -34,6 +34,8 @@ function handle_response(response_type::Symbol, data, observables)
         footprints_frame[] = Colors.ARGB32.(img)
         footprints_peaks[] = peaks
         send_request(conn, :reconstructedframe, observables["frame_n"][])
+    elseif response_type == :behaviorframe
+        behavior_frame[] = data
     elseif response_type == :nframes
         observables["n_frames"][] = data
         observables["tmin"][] = 1

@@ -193,6 +193,8 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         put!(responses, (:videoloaded, nothing))
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
         put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
+    elseif jobtype == :loadbehavior
+        put!(status, ("Behavior videos not supported yet.", -1.0))
     end
 end
 
@@ -203,6 +205,8 @@ function send_footprints(workerstate, status, responses)
     put!(responses, (:footprints, (img, amap)))
     put!(status, ("Drawed plot of footprints", 1.0))
 end
+
+
 
 nothing
 
