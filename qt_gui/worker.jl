@@ -9,6 +9,9 @@ import HDF5
 import Colors
 import Distributions
 import LinearAlgebra
+import VideoIO
+import CSV
+import DataFrames
 using ProgressMeter #TODO: should remove this dependency
 
 println("Imports done")
@@ -29,9 +32,12 @@ println("Includes done")
 mutable struct WorkerState
     videoloader::VideoLoaders.VideoLoader
     solution::Sol
+    behaviorvideo::String
 end
-WorkerState(videoloader) = WorkerState(videoloader, Sol(videoloader))
+WorkerState(videoloader) = WorkerState(videoloader, Sol(videoloader), "")
 WorkerState() = WorkerState(VideoLoaders.EmptyLoader())
+
+const frame_mapping = CSV.read("../data/frame_mapping.csv", DataFrames.DataFrame);
 
 function work(jobs, status, responses)
     jobqueue = Queue{Tuple{Symbol, Any}}()
@@ -117,6 +123,18 @@ function processrequest(requesttype, data, status, responses, workerstate)
         else
             put!(status, ("Invalid cell $cellid", -1))
         end
+    elseif requesttype == :behaviorframe
+        frameno = Int(data)
+        if workerstate.behaviorvideo != ""
+            v = VideoIO.openvideo(workerstate.behaviorvideo);
+            fps = 60.0#VideoIO.framerate(v)
+            b_frameno = frame_mapping.behavior_frame_no[frameno]
+            t = float((b_frameno-1) / fps)
+            #println("data=$data, frameno=$frameno, fps=$fps, t=$t")
+            VideoIO.seek(v, t)
+            frame = VideoIO.read(v)
+            put!(responses, (:behaviorframe, frame))
+        end
     end
 end
 
@@ -194,7 +212,9 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
         put!(responses, (:framesize, VideoLoaders.framesize(workerstate.videoloader)))
     elseif jobtype == :loadbehavior
-        put!(status, ("Behavior videos not supported yet.", -1.0))
+        workerstate.behaviorvideo = data
+        put!(responses, (:behaviorloaded, data))
+        put!(status, ("Opened $data for behavior.", -1.0))
     end
 end
 

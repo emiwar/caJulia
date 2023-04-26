@@ -46,6 +46,7 @@ function init_observables()
     on(observables["frame_n"]) do f
         send_request(conn, :rawframe, f)
         send_request(conn, :reconstructedframe, f)
+        send_request(conn, :behaviorframe, f)
     end
     for i=1:2
         observables["cmin$i"] = Observable(0.0)
@@ -70,12 +71,12 @@ function init_observables()
     observables["traceCol"] = Observable("#000000")
     observables["tmin"] = Observable(0)
     observables["tmax"] = Observable(1)
-    on((_)->(@emit updateDisplay(5)), observables["traceS"])
-    on((_)->(@emit updateDisplay(5)), observables["traceC"])
-    on((_)->(@emit updateDisplay(5)), observables["traceR"])
-    on((_)->(@emit updateDisplay(5)), observables["frame_n_float"])
-    on((_)->(@emit updateDisplay(5)), observables["tmin"])
-    on((_)->(@emit updateDisplay(5)), observables["tmax"])
+    on((_)->(@emit updateDisplay(6)), observables["traceS"])
+    on((_)->(@emit updateDisplay(6)), observables["traceC"])
+    on((_)->(@emit updateDisplay(6)), observables["traceR"])
+    on((_)->(@emit updateDisplay(6)), observables["frame_n_float"])
+    on((_)->(@emit updateDisplay(6)), observables["tmin"])
+    on((_)->(@emit updateDisplay(6)), observables["tmax"])
     observables["selected_cell"] = Observable(0)
     return observables
 end
@@ -85,7 +86,7 @@ const rec_frame = Observable(zeros(Float32, 100, 100));
 const init_frame = Observable(zeros(Float32, 100, 100) .* NaN);
 const footprints_frame = Observable(zeros(Colors.ARGB32, 100, 100));
 const footprints_peaks = Observable(zeros(Int, 100, 100));
-const behavior_frame = Observable(zeros(Colors.ARGB32, 100, 100));
+const behavior_frame = Observable(ones(Colors.ARGB32, 100, 100));
 #function updateDisplays()
 #    @emit updateDisplay(1)
 #end
@@ -121,7 +122,7 @@ function run_gui()
         paint_cfunction2 = video_canvas(rec_frame, observables["cmin2"], observables["cmax2"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
         paint_cfunction3 = video_canvas(init_frame, observables["cmin3"], observables["cmax3"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"], :inferno),
         paint_cfunction4 = video_canvas_raw(footprints_frame, observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
-        paint_cfunction5 = video_canvas_raw(behavior_frame, Observable(0), Observable(100), Observable(0), Observable(100)),
+        paint_cfunction5 = video_canvas_raw(behavior_frame),
         timer = QTimer(),
         observables = observables
     )

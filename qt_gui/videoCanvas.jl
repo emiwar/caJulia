@@ -46,3 +46,11 @@ function video_canvas_raw(frame::Observable, xmin, xmax, ymin, ymax)
     end
     return canvas_func(update_canvas)
 end
+
+function video_canvas_raw(frame::Observable)
+    @assert eltype(frame) == Matrix{Colors.ARGB32}
+    function update_canvas(buffer)
+        buffer .= Images.imresize(frame[], size(buffer))
+    end
+    return canvas_func(update_canvas)
+end

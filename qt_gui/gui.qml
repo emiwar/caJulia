@@ -32,7 +32,7 @@ ApplicationWindow {
         }
         Action { 
             text: qsTr("Open behavior video") 
-            onTriggered: Julia.resetworker();
+            onTriggered: openBehaviorDialog.visible = true;
         }
         Action { 
             text: qsTr("Ping worker") 
@@ -579,7 +579,8 @@ ApplicationWindow {
         else if (disp_id == 2) viewport2.update()
         else if (disp_id == 3) viewport3.update()
         else if (disp_id == 4) viewport4.update()
-        else if (disp_id == 5) traceCanvas.requestPaint()
+        else if (disp_id == 5) viewport5.update()
+        else if (disp_id == 6) traceCanvas.requestPaint()
     }
   }
 
@@ -623,7 +624,7 @@ ApplicationWindow {
     selectExisting: true
     selectFolder: false
     onAccepted: {
-        Julia.openbehaviorvideo(openVideoDialog.fileUrl)
+        Julia.openbehaviorvideo(openBehaviorDialog.fileUrl)
     }
     //onRejected: {
     //    console.log("Canceled")
