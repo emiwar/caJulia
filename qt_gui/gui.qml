@@ -21,7 +21,9 @@ ApplicationWindow {
 
   menuBar: MenuBar {
     Menu {
+        id: fileMenu
         title: qsTr("File")
+
         Action {
             text: qsTr("Open video") 
             onTriggered: openVideoDialog.visible = true;
@@ -197,7 +199,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             id: viewport1ContrastSlider
             from: 0
-            to: 512
+            to: 2048
             second.value: 256
             first.onMoved: {
                 observables.cmin1 = first.value

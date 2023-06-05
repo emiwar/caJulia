@@ -52,8 +52,10 @@ end
 function update!(bg::PerVideoBackground, sol, vl)
     for video_id = 1:nvideos(vl)
         fr = framerange_video(vl, video_id)
-        bg.b[:, video_id] .= bg.m[:, video_id] .-
-            view(sol.A'*sum(view(sol.C, fr, :); dims=1)' ./ nframes(vl), :)
+        sumC = sum(view(sol.C, fr, :); dims=1)
+        println(size(sol.A),  " ", size(sumC))
+        #bg.b[:, video_id] .= bg.m[:, video_id] .- view((sol.A'*sumC') ./ nframes(vl), :)
+        bg.b[:, video_id] .= bg.m[:, video_id] .- view((sumC*sol.A) ./ nframes(vl), :)
     end
     for other_bg in sol.backgrounds
         if other_bg !== bg

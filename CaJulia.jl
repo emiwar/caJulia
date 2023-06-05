@@ -38,13 +38,14 @@ example_files_huge = ["recording_20211016_163921.hdf5",
 #nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files_huge[1],
 #                                   "images", (1:1440, 1:1080,  1:24000))
 nwbLoader = VideoLoaders.NWBLoader("../data/"*example_files[1])
+#nwbLoader = VideoLoaders.NWBLoader("/mnt/dmclab/Vasiliki/motion corrected video calim inscopix example.nwb")
 splitLoader = VideoLoaders.SplitLoader(nwbLoader, 50)
 #alignedLoader = VideoLoaders.AlignedHDFLoader("../data/aligned_videos_animal3.csv", 10;
 #                                 pathPrefix = "../data/")
 hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
-minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
-VideoLoaders.calcmin!(minSubtr)
-deviceCache = VideoLoaders.CachedDeviceLoader(minSubtr; max_memory=1.0e10)
+#minSubtr = VideoLoaders.SubtractMinLoader(hostCache)
+#VideoLoaders.calcmin!(minSubtr)
+deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.6e10)
 
 
 gui = GUI.GUIState(deviceCache);
@@ -65,6 +66,7 @@ initA!(sol; callback=(_,_,_)->nothing);
 zeroTraces!(sol);
 initBackgrounds!(deviceCache, sol; callback=(_,_,_)->nothing);
 updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!; callback=(_,_,_)->nothing);
+updateROIs!(deviceCache, sol; callback=(_,_,_)->nothing);
 
 for it = 3:6
     updateROIs!(deviceCache, sol);
@@ -75,3 +77,21 @@ for it = 3:6
     updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!);
     to_hdf("animal3_it$(it).h5", sol, deviceCache)
 end
+
+function run_for_timing(deviceCache)
+    sol = Sol(deviceCache)
+    sol.I = negentropy_img(deviceCache)
+    initA!(sol; callback=(_,_,_)->nothing)
+    zeroTraces!(sol)
+    initBackgrounds!(deviceCache, sol; callback=(_,_,_)->nothing)
+    updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!; callback=(_,_,_)->nothing)
+    updateROIs!(deviceCache, sol; callback=(_,_,_)->nothing)
+    merge!(sol, thres=.6; callback=(_,_,_)->nothing)
+    updateROIs!(deviceCache, sol; callback=(_,_,_)->nothing)
+    updateTraces!(deviceCache, sol, deconvFcn! = oasis_opt!; callback=(_,_,_)->nothing)
+    updateROIs!(deviceCache, sol; callback=(_,_,_)->nothing)
+end
+
+VideoLoaders.clear!(hostCache)
+VideoLoaders.clear!(deviceCache)
+@CUDA.time run_for_timing(deviceCache);

@@ -12,6 +12,8 @@ include("hdfLoader.jl")
 include("segmentLoader.jl")
 include("cachedLoader.jl")
 include("subtractMinLoader.jl")
+include("filterLoader.jl")
+include("motionCorrectionLoader.jl")
 
 struct EmptyLoader <: VideoLoader end
 nframes(::EmptyLoader) = 1
@@ -54,8 +56,8 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     end
     splitloader = SplitLoader(baseloader, nsplits)
     hostcache = CachedHostLoader(splitloader; max_memory=hostCacheSize)
-    minSubtr = VideoLoaders.SubtractMinLoader(hostcache)
-    devicecache = CachedDeviceLoader(minSubtr, max_memory=deviceCacheSize)
+    #minSubtr = VideoLoaders.SubtractMinLoader(hostcache)
+    devicecache = CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
 end
 
 end

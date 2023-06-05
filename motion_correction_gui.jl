@@ -1,18 +1,35 @@
 import GLMakie
 import CUDA
 import cuDNN
+import Images
 using ProgressMeter
 include("videoLoaders/videoLoaders.jl")#include("motion_correction.jl")
 
-example_files = ["../data/recording_20211016_163921.hdf5",
+example_files = "../data/" .* ["../data/recording_20211016_163921.hdf5",
                  "../data/recording_20220919_135612.hdf5"]
 
-    
-nwbLoader = VideoLoaders.HDFLoader("../data/"*example_files[1],
-                                "images", (1:1440, 1:1080,  1:2000))
-splitLoader = VideoLoaders.SplitLoader(nwbLoader, 5)
+server_folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1/2nd batch sep 2022/Oprm1 calimaging 2nd batch sept 2022 - inscopix data/oprm1 day1 20220919/"
+example_files_server = server_folder .* [
+    "recording_20220919_135612.hdf5",
+    "recording_20220919_143826.hdf5",
+    "recording_20220919_144807.hdf5"
+]
+
+#Full: (1:1440, 1:1080, :)
+manual_cropping_server = [
+    (750:1350, 250:850, 1:3000),
+    (1:1440, 1:1080, 1:3000),
+    (1:1440, 1:1080, 1:3000)
+]
+
+
+nwbLoader = VideoLoaders.HDFLoader(example_files_server[3],
+                                "images", manual_cropping_server[3])
+splitLoader = VideoLoaders.SplitLoader(nwbLoader, 20)
 hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
-deviceCache = VideoLoaders.CachedDeviceLoader(hostCache; max_memory=1.0e10)
+filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(10.0)))
+mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader)
+deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader; max_memory=1.0e10)
 #mc = MotionCorrecter(vl)
 #mc.shifts .= [(round(25*cos(2pi*t/40)), round(25*sin(2pi*t/40))) for t=1:mc.nFrames]
 #@CUDA.time shiftedVideoDevice = loadCorrectedSeg!(mc, vl, 1);
@@ -57,38 +74,96 @@ end
 meanFrame = sumFrame ./ VideoLoaders.nframes(deviceCache)
 
 #CUDA.synchronize()
-videoDisplayType = GLMakie.Observable(:original)
-current_frame = GLMakie.lift( timeSlider.value, videoDisplayType) do t, vdt
+videoDisplayType = GLMakie.Observable(:fft_dog)
+
+fft_plan = CUDA.CUFFT.plan_fft(CUDA.CuArray{Float32}(undef, VideoLoaders.framesize(deviceCache)...)) |> GLMakie.Observable
+freq_slider = GLMakie.IntervalSlider(topRow[1, 1], range=0:500)
+fft_filter = GLMakie.lift(freq_slider.interval, videoDisplayType, fft_plan) do interval, vdt, fft_plan
+    fs = VideoLoaders.framesize(deviceCache)
+    l, h = interval
+    if vdt==:fft_dog
+        l = max(l, 0.01)
+        si = min(4*h+1, 1023, 1023)
+        dog = Images.Kernel.DoG((l,l), (h,h), (si, si))
+        return fft_plan*CUDA.cu(pad_filter(dog, fs))
+    else #if vdt==:fft_filter
+        return CUDA.cu(generate_bandpass_filter_no_shift(fs, l, h))
+    end
+end
+#=
+current_frame = GLMakie.lift(timeSlider.value, videoDisplayType,
+                             fft_filter, fft_plan) do t, vdt, fft_filter, fft_plan
     if vdt == :original
         return Float32.(VideoLoaders.readframe(hostCache, t))#reshape(Array(view(originalVideoDevice, :, t)), vl.frameSize...))
     elseif vdt == :smoothed_sub
         rawframe = VideoLoaders.readframe(deviceCache, t)
         diff = rawframe .- view(smoothed, :)
         return reshape(Array(diff), VideoLoaders.framesize(deviceCache))
+    elseif vdt == :min_sub
+        rawframe = VideoLoaders.readframe(deviceCache, t)
+        diff = rawframe .- minFrame
+        return reshape(Array(diff), VideoLoaders.framesize(deviceCache))
+    elseif vdt == :mean_sub
+        rawframe = VideoLoaders.readframe(deviceCache, t)
+        diff = rawframe .- meanFrame
+        return reshape(Array(diff), VideoLoaders.framesize(deviceCache))
+    elseif vdt == :fft_filtered || vdt == :fft_dog
+        fs = VideoLoaders.framesize(deviceCache)
+        fft_frame = fft_plan * reshape(VideoLoaders.readframe(deviceCache, t), fs)
+        fft_frame .*= fft_filter
+        return Array(real(fft_plan \ fft_frame))
+    elseif vdt == :dog
+        dog = Images.Kernel.DoG(10.0)
+        Images.imfilter(VideoLoaders.readframe(hostCache, t), dog)
+    elseif vdt == :motion_corrected
+        shift = shifts[t]
+        phaseDiff = phaseDiffs[t]
+        framesize = VideoLoaders.framesize(deviceCache)
+
+        dummyFrame = CUDA.CuMatrix{Float32}(undef, framesize...)
+        freqs1 = CUDA.CUFFT.fftfreq(framesize[1], 1.0f0)
+        freqs2 = CUDA.CUFFT.fftfreq(framesize[2], 1.0f0)
+        plan = CUDA.CUFFT.plan_fft(dummyFrame)
+
+        rawframe = VideoLoaders.readframe(deviceCache, t)
+        freq = plan * reshape(rawframe, framesize...)
+        shifted_freq = freq .* cis.(-Float32(2pi) .* (freqs1 .* shift[1] .+
+                                                       freqs2' .* shift[2]) .+
+                                                       phaseDiff)
+        shifted = view(plan \ shifted_freq, :)
+        reshape(Array(real.(shifted)), framesize)
     else
         error("Unknown videoDisplayType $vdt")
     end
 end
+=#
+
+current_frame = GLMakie.lift(timeSlider.value) do t
+    f = VideoLoaders.readframe(deviceCache, t)
+    return reshape(Array(f), VideoLoaders.framesize(deviceCache))
+end
 
 contrast_range = -128:1024#Int64(maximum(originalVideoDevice))
-contrast_slider = GLMakie.IntervalSlider(topRow[1, 1], range=contrast_range)
-ax1 = GLMakie.Axis(topRow[2, 1])
+contrast_slider = GLMakie.IntervalSlider(topRow[2, 1], range=contrast_range)
+ax1 = GLMakie.Axis(topRow[3, 1])
 GLMakie.image!(ax1, current_frame, colorrange=contrast_slider.interval,
        interpolate=false)
 ax1.aspect = GLMakie.DataAspect()
 
-contrast_slider_min = GLMakie.IntervalSlider(topRow[1, 2], range=contrast_range)
-ax2 = GLMakie.Axis(topRow[2, 2])
+#contrast_slider_min = GLMakie.IntervalSlider(topRow[1, 2], range=contrast_range)
+#ax2 = GLMakie.Axis(topRow[2, 2])
 #reshape(Array(minFrame), VideoLoaders.framesize(deviceCache)...)
 #reshape(meanFrame, frame_size) .-
-GLMakie.image!(ax2, Array(smoothed), colorrange=contrast_slider_min.interval,
-               interpolate=false)
-ax2.aspect = GLMakie.DataAspect()
+#GLMakie.image!(ax2, Array(smoothed), colorrange=contrast_slider_min.interval,
+#               interpolate=false)
+#ax2.aspect = GLMakie.DataAspect()
 
-GLMakie.linkaxes!(ax1, ax2)
+#GLMakie.linkaxes!(ax1, ax2)
 GLMakie.display(fig)
 
-
+import Plots
+import Images
+import NNlib
 
 frame_size = VideoLoaders.framesize(deviceCache)
 m_reshaped = reshape(meanFrame, frame_size..., 1, 1); #size(Ad, 1)
@@ -120,3 +195,205 @@ end
 #        VideoIO.write(writer, uint_frame)
 #    end
 #end
+
+#frame = CUDA.zeros(size(current_frame[]) .+ 60)
+#frame[31:end-30, 31:end-30] = current_frame[]
+frame = VideoLoaders.readframe(hostCache, 1); #current_frame[]
+frame = NNlib.pad_reflect(Float32.(CUDA.cu(frame)), (30, 30, 30, 30))
+framesize = size(frame)
+
+#frame = CUDA.ones(size(current_frame[]))
+#framesize = size(frame)
+
+dog = Images.Kernel.DoG(10.0)#(10.0, 10.0), (14.0, 14.0), framesize)
+
+function pad_filter(kernel, framesize)
+    padded = zeros(eltype(kernel), framesize)
+    for idx=CartesianIndices(kernel)
+        r = (idx[1]+framesize[1]-1)%framesize[1] + 1
+        c = (idx[2]+framesize[2]-1)%framesize[2] + 1
+        padded[r, c] = kernel[idx]
+    end
+    return padded
+end
+
+Plots.heatmap(Array(frame)', fmt=:png)
+Plots.heatmap(Images.imfilter(Array(frame[31:end-30, 31:end-30]), dog)', fmt=:png, clim=(-10, 10))
+
+padded_kernel = CUDA.cu(pad_filter(dog, framesize))
+plan = CUDA.CUFFT.plan_fft(frame)
+
+fft_kernel = plan * padded_kernel
+fft_frame = plan * frame
+fft_product = fft_kernel .* fft_frame
+
+result = real(plan \ fft_product)
+Plots.heatmap(Array(result[31:end-30, 31:end-30])', fmt=:png, clim=(-10, 10))
+
+
+
+
+function generate_bandpass_filter_no_shift(size, low_radius, high_radius)
+    h, w = size
+    filter_mask = zeros(Float32, h, w)
+
+    cy, cx = div.(size, 2)
+
+    for i in 1:h
+        for j in 1:w
+            idist = i <= cy ? i - 1 : h - i
+            jdist = j <= cx ? j - 1 : w - j
+            dist = sqrt(idist^2 + jdist^2)
+            if low_radius <= dist <= high_radius
+                filter_mask[i, j] = 1.0
+            end
+        end
+    end
+
+    return filter_mask
+end
+plan = CUDA.CUFFT.plan_fft(CUDA.cu(current_frame[]))
+fft_frame = plan * CUDA.cu(current_frame[])
+framesize = size(fft_frame)
+fft_frame .*= CUDA.cu(generate_bandpass_filter_no_shift(framesize, 10, 100))
+#fft_frame[1:5, :] .= 0.0
+#fft_frame[:, 1:5] .= 0.0
+#fft_frame[1:5, :] .= 0.0
+#fft_frame[:, 1:5] .= 0.0
+Plots.heatmap(Array(real(plan \ fft_frame))', fmt=:png, clim=(-100, 100))
+
+
+
+function fitMotionCorrection(vl::VideoLoaders.VideoLoader, subframe)
+    nframes = VideoLoaders.nframes(vl)
+    framesize = VideoLoaders.framesize(vl)
+    shifts = fill((0, 0), nframes)
+    phaseDiffs = fill(0.0f0, nframes)
+    dummyFrame = CUDA.CuMatrix{Float32}(undef, framesize...)
+    freqs1 = CUDA.CUFFT.fftfreq(framesize[1], 1.0f0)
+    freqs2 = CUDA.CUFFT.fftfreq(framesize[2], 1.0f0)
+    plan = CUDA.CUFFT.plan_fft(dummyFrame)
+    @showprogress "mapreduce" for seg_id = VideoLoaders.optimalorder(deviceCache)
+        seg = VideoLoaders.readseg(deviceCache, seg_id)
+        frameRange = VideoLoaders.framerange(deviceCache, seg_id)
+        cntr = (1 .+ framesize) ./ 2
+        step_size = 1
+        shifts[frameRange] .= [(0, 0)]
+        while step_size < size(seg, 2)
+            for i=1:(2*step_size):(size(seg, 2)-step_size)
+                raw_frame = reshape(view(seg, :, i) .- subframe, framesize...)
+                raw_freq = plan * raw_frame;
+                target_frame = reshape(view(seg, :, i+step_size) .- subframe, framesize...)
+                target_freq = plan * target_frame
+                cross_corr_freq = raw_freq .* conj(target_freq)
+                cross_corr = plan \ cross_corr_freq
+                _, max_flat_idx = CUDA.findmax(view(abs.(cross_corr), :))
+                maxidx = CartesianIndices(cross_corr)[max_flat_idx]
+                max_val = @CUDA.allowscalar cross_corr[maxidx]
+                phaseDiff = atan(imag(max_val), real(max_val))
+                shift = (ifelse.(maxidx.I .> cntr, maxidx.I .- framesize, maxidx.I) .- 1)
+                shifted_freq = target_freq .* cis.(-Float32(2pi) .* (freqs1 .* shift[1] .+
+                                                                     freqs2' .* shift[2]) .+
+                                                                     phaseDiff)
+                shifted = real(plan \ shifted_freq)
+                #seg[:, i] .+= view(shifted, :)
+                
+                start_frame = frameRange[min(i+step_size, size(seg, 2))]
+                end_frame = frameRange[min(i+2*step_size-1, size(seg, 2))]
+                for j = start_frame:end_frame
+                    shifts[j] = shifts[j] .+ (shift[1], shift[2])
+                    phaseDiffs[j] = phaseDiff
+                end
+            end
+            step_size *= 2
+        end
+        #The video segment has been modified, so should force reloading before
+        #using it again.
+        VideoLoaders.clearseg!(vl, seg_id)
+    end
+    return shifts, phaseDiffs
+end
+
+shifts, phaseDiffs = fitMotionCorrection(deviceCache, meanFrame)
+shifts = map(s->.-s, shifts)
+
+maxFrame = CUDA.fill(Float32(-Inf), (prod(VideoLoaders.framesize(deviceCache)), 1))
+@showprogress "mapreduce" for i = VideoLoaders.optimalorder(deviceCache)
+    seg = VideoLoaders.readseg(deviceCache, i)
+    maxFrame .= max.(minFrame, maximum(seg, dims=2))
+end
+
+sqrFrame = CUDA.fill(Float32(0.0), (prod(VideoLoaders.framesize(deviceCache)), 1))
+@showprogress "mapreduce" for i = VideoLoaders.optimalorder(deviceCache)
+    seg = VideoLoaders.readseg(deviceCache, i)
+    sqrFrame .+= sum(seg .^ 2, dims=2)
+end
+
+function autoCorr(frame)
+    framesize = size(frame)
+    plan = CUDA.CUFFT.plan_fft(frame)
+    freq = plan * frame
+    cross_corr_freq = freq .* conj(freq)
+    cross_corr = plan \ cross_corr_freq
+    return abs.(cross_corr)
+end
+
+
+function findShiftPairwise(frame1, frame2, framesize)
+    frame1 = reshape(frame1, framesize)
+    frame2 = reshape(frame2, framesize)
+    #freqs1 = CUDA.CUFFT.fftfreq(framesize[1], 1.0f0)
+    #freqs2 = CUDA.CUFFT.fftfreq(framesize[2], 1.0f0)
+    plan = CUDA.CUFFT.plan_fft(frame1)
+    cntr = (1 .+ framesize) ./ 2
+    frame1_freq = plan * frame1;
+    frame2_freq = plan * frame2;
+    cross_corr_freq = frame1_freq .* conj(frame2_freq)
+    cross_corr = plan \ cross_corr_freq
+    _, max_flat_idx = CUDA.findmax(view(abs.(cross_corr), :))
+    maxidx = CartesianIndices(cross_corr)[max_flat_idx]
+    #max_val = @CUDA.allowscalar cross_corr[maxidx]
+    #phaseDiff = atan(imag(max_val), real(max_val))
+    shift = (ifelse.(maxidx.I .> cntr, maxidx.I .- framesize, maxidx.I) .- 1)
+    return shift
+end
+
+
+GLMakie.set_close_to!(timeSlider, 1)
+window = (600:1200, 250:600)
+#window = (600:1200, 50:800)
+first_frame = view(CUDA.cu(current_frame[][window...]), :)
+for t = 2:300
+    GLMakie.set_close_to!(timeSlider, t)
+    frame = view(CUDA.cu(current_frame[][window...]), :)
+    println(findShiftPairwise(first_frame, frame, length.(window)))
+end
+
+frame1 = VideoLoaders.readframe(deviceCache, 1);
+frame2 = VideoLoaders.readframe(deviceCache, 2);
+frame3 = VideoLoaders.readframe(deviceCache, 3);
+frame4 = VideoLoaders.readframe(deviceCache, 4);
+frame5 = VideoLoaders.readframe(deviceCache, 5);
+frame10 = VideoLoaders.readframe(deviceCache, 10);
+frame20 = VideoLoaders.readframe(deviceCache, 20);
+seg1 = VideoLoaders.readseg(deviceCache, 1);
+
+plotFrame(frame; kwargs...) = Plots.heatmap(reshape(Array(frame), VideoLoaders.framesize(deviceCache)), fmt=:png; kwargs...)
+
+subFrame(frame) = view(reshape(frame, VideoLoaders.framesize(deviceCache)), 600:950, 180:500)
+
+foreground = CUDA.fill(Float32(0), (prod(VideoLoaders.framesize(deviceCache)), 1));
+background = sum(view(seg1, :, 1:20), dims=2) ./ 20;
+#hardcoded_mc = [(0,0), (-1, 5), (10, -5), (10, 5), (0, 10)]
+for i=1:20
+    background_subtracted = VideoLoaders.readframe(deviceCache, i) .- background
+end
+
+kernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(10.0)) |> CUDA.cu
+seg_reshaped = reshape(seg1, framesize..., 1, size(seg1, 2));
+padded = NNlib.pad_reflect(seg_reshaped, 30);
+seg_smoothed = cuDNN.cudnnConvolutionForward(reshape(kernel, 61, 61, 1, 1), padded);
+
+
+
+Plots.heatmap(seg_smoothed[:,:,1,1] |> Array, fmt=:png)
