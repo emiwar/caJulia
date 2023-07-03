@@ -19,6 +19,12 @@ function pixelcorrection!(bg::PerVideoRank1Background, other_bg::StaticBackgroun
     end
 end
 
+function pixelcorrection!(bg::StaticBackground, other_bg::LensBackground, vl)
+    b_freq = CUDA.CUFFT.fft(reshape(other_bg.b, framesize(vl)))
+    meanshifted = real.(CUDA.CUFFT.ifft(b_freq .* reshape(other_bg.sumShiftFreqs, framesize(vl)))) ./ nframes(vl)
+    bg.b .-= view(meanshifted, :)
+end
+
 function tracecorrection!(bg::PerVideoRank1Background, other_bg::PerVideoBackground, vl)
     for video_id = 1:nvideos(vl)
         overlap = view(bg.b, :, video_id)' * view(other_bg.b, :, video_id)

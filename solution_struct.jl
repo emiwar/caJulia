@@ -13,7 +13,7 @@ mutable struct Sol{BackgroundsT <: Tuple}
     colors::Vector{Colors.RGB{Colors.N0f8}}
 end
 
-function Sol(vl::VideoLoaders.VideoLoader)
+function Sol(vl::VideoLoaders.VideoLoader, backgrounds::Tuple)
     T = nframes(vl)
     height, width = framesize(vl)
     M = width*height
@@ -25,8 +25,12 @@ function Sol(vl::VideoLoaders.VideoLoader)
     gammas = fill(0.8, 0)
     lambdas = fill(50.0, 0)
     colors = Colors.RGB{Colors.N0f8}[]
-    backgrounds = (PerVideoBackground(vl), PerVideoRank1Background(vl))
     Sol(A, R, C, S, I, backgrounds, gammas, lambdas, (height, width), colors)
+end
+
+function Sol(vl::VideoLoaders.VideoLoader)
+    defaultbackgrounds = (PerVideoBackground(vl), PerVideoRank1Background(vl))
+    Sol(vl, defaultbackgrounds)
 end
 
 ncells(sol::Sol) = length(sol.colors)

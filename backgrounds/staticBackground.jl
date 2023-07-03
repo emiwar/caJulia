@@ -40,7 +40,15 @@ function initseg!(bg::StaticBackground, seg, seg_id, vl)
 end
 
 function update!(bg::StaticBackground, sol, vl)
-    bg.b .= bg.m .- view(sol.A'*sum(sol.C; dims=1)' ./ nframes(vl), :)
+    bg.b .= bg.m
+    if ncells(sol) > 0
+        bg.b .-= view(sol.A'*sum(sol.C; dims=1)' ./ nframes(vl), :)
+    end
+    for other_bg in sol.backgrounds
+        if other_bg !== bg
+            pixelcorrection!(bg, other_bg, vl)
+        end
+    end
 end
 
 function reconstruct_frame(bg::StaticBackground, frame_id, vl)
