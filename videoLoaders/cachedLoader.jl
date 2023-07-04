@@ -96,3 +96,7 @@ end
 function filename(vl::CachedLoader, i::Integer)
     filename(vl.source_loader, i)
 end
+
+function savetohdf(vl::CachedLoader, hdfhandle)
+    savetohdf(vl.source_loader, hdfhandle)
+end

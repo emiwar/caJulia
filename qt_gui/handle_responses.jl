@@ -1,5 +1,6 @@
 function handle_response(response_type::Symbol, data, observables)
     if response_type == :videoloaded
+        send_request(conn, :framerange_estimate)
         send_request(conn, :rawframe, observables["frame_n"][])
         send_request(conn, :reconstructedframe, observables["frame_n"][])
         send_request(conn, :initframe)
@@ -55,8 +56,15 @@ function handle_response(response_type::Symbol, data, observables)
     elseif response_type == :subtractedmin
         send_request(conn, :raw, observables["frame_n"][])
         send_request(conn, :reconstructedframe, observables["frame_n"][])
+    elseif response_type == :motioncorrected
+        send_request(conn, :raw, observables["frame_n"][])
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
     elseif response_type == :behaviorloaded
         send_request(conn, :behaviorframe, observables["frame_n"][])
+    elseif response_type == :framerange_estimate
+        low, high = data
+        observables["crangemin"][] = low
+        observables["crangemax"][] = high
     else
         println("Unhandled response: $response_type")
     end

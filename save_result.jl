@@ -36,13 +36,14 @@ function to_hdf(filename::String, sol::Sol, vl::VideoLoader; videofilename=nothi
             end
         end
 
+        VideoLoaders.savetohdf(vl, fid)
+
         fid["/meta/CaJulia/git"] = readchomp(`git rev-parse --short HEAD`)
-        if videofilename !== nothing
-            fid["/meta/videoFilename"] = string(videoFilename)
-        elseif !VideoLoaders.multivideo(vl)
-            fid["/meta/videoFilename"] = VideoLoaders.filename(vl, 1)
-        end
-        fid["/meta/nsegs"] = nsegs(vl)
+        #if videofilename !== nothing
+        #    fid["/meta/videoFilename"] = string(videoFilename)
+        #elseif !VideoLoaders.multivideo(vl)
+        #    fid["/meta/videoFilename"] = VideoLoaders.filename(vl, 1)
+        #end
     end
     nothing
 end

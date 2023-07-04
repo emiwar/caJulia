@@ -71,6 +71,8 @@ function init_observables()
     observables["traceCol"] = Observable("#000000")
     observables["tmin"] = Observable(0)
     observables["tmax"] = Observable(1)
+    observables["crangemin"] = Observable(-256.0)
+    observables["crangemax"] = Observable(256.0)
     on((_)->(@emit updateDisplay(6)), observables["traceS"])
     on((_)->(@emit updateDisplay(6)), observables["traceC"])
     on((_)->(@emit updateDisplay(6)), observables["traceR"])
@@ -81,7 +83,7 @@ function init_observables()
     return observables
 end
 
-const raw_frame = Observable(zeros(Int16, 100, 100));
+const raw_frame = Observable(zeros(Float32, 100, 100));
 const rec_frame = Observable(zeros(Float32, 100, 100));
 const init_frame = Observable(zeros(Float32, 100, 100) .* NaN);
 const footprints_frame = Observable(zeros(Colors.ARGB32, 100, 100));
@@ -116,6 +118,7 @@ function run_gui()
     @qmlfunction pandrag
     @qmlfunction zoomscrolltrace
     @qmlfunction pandragtrace
+    @qmlfunction motioncorrect
     observables = init_observables()
     QML.loadqml("qt_gui/gui.qml",
         paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),

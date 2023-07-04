@@ -135,6 +135,10 @@ function processrequest(requesttype, data, status, responses, workerstate)
             frame = VideoIO.read(v)
             put!(responses, (:behaviorframe, frame))
         end
+    elseif requesttype == :framerange_estimate
+        ex_seg_id = VideoLoaders.optimalorder(videoloader)[1]
+        range = extrema(VideoLoaders.readseg(videoloader, ex_seg_id))
+        put!(responses, (:framerange_estimate, range))
     end
 end
 
@@ -198,6 +202,25 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         VideoLoaders.clear!(videoloader)
         put!(responses, (:subtractedmin, nothing))
         put!(status, ("Subtracted min", 1.0))
+    elseif jobtype == :motioncorrect
+        put!(status, ("Motion correcting", 0.0))
+        VideoLoaders.fitMotionCorrection!(videoloader.source_loader; callback)
+        VideoLoaders.clear!(videoloader)
+        put!(responses, (:motioncorrected, nothing))
+        put!(status, ("Motion corrected", 1.0))
+    elseif jobtype == :clearfilter
+        videoloader.source_loader.source_loader.filter .= 1.0
+        VideoLoaders.clear!(videoloader)
+        put!(responses, (:filterchanged, nothing))
+        put!(status, ("Filter cleared", 1.0))
+    elseif jobtype == :setbandpassfilter
+        low, high = data
+        fs = VideoLoaders.framesize(videoloader)
+        filter = VideoLoaders.generate_bandpass_filter_no_shift(fs, low, high)
+        VideoLoaders.setfilterkernel(videoloader.source_loader.source_loader, filter)
+        VideoLoaders.clear!(videoloader)
+        put!(responses, (:filterchanged, nothing))
+        put!(status, ("Filter set to band pass ($low -- $high)", 1.0))
     elseif jobtype == :saveresult
         filename = data
         put!(status, ("Saving result to $filename", 0.0))

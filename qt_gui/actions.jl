@@ -65,6 +65,10 @@ function subtractmin()
     submit_job(conn, :subtractmin)
 end
 
+function motioncorrect()
+    submit_job(conn, :motioncorrect)
+end
+
 function footprintclick(rel_x, rel_y, observables)
     w, h = size(footprints_peaks[])
     xmin = observables["xmin"][]

@@ -3,11 +3,10 @@ macro powerTuple(variable, n)
     Meta.parse("("*join(("$(string(variable))^$i" for i=1:n), ", ")*")")
 end
 
-
 function negentropy_img(vl::VideoLoader)
     pows = mapreduce(y->(y, y^2, y^3, y^4), .+, vl,
                         (0.0, 0.0, 0.0, 0.0), dims=2)
-    T = nframes(vl)
+    T = VideoLoaders.nframes(vl)
     map(yp->negentropy_approx((yp ./ T)...), pows)
 end
 

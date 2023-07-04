@@ -1,6 +1,6 @@
 import Images
 
-function initA!(sol::Sol; threshold=2e-2, median_wnd=1, callback)
+function initA!(sol::Sol; median_wnd=1, callback) #threshold=2e-2, 
     projection = reshape(Array(sol.I), sol.frame_size...) 
     if median_wnd > 1
         projection = Images.mapwindow(Statistics.median, projection, (median_wnd, median_wnd))
@@ -169,7 +169,8 @@ function getparent(parents, i)::Int
     end
 end
 
-function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000; callback=(_,_,_)->nothing)
+#min_size=20, sens=50.0
+function segment_peaks_unionfind(I, min_size=20, sens=500.0, min_n=1000; callback=(_,_,_)->nothing)
     segmentation = zeros(Int64, size(I))
     sorted_pixels = CartesianIndices(I)[sortperm(I[:]; rev=true)]
     parents = Int64[]
@@ -223,12 +224,24 @@ function segment_peaks_unionfind(I, min_size=20, sens=50.0, min_n=1000; callback
     c_ss = 0.0
     c_n = 0
     callback("Finding unique blobs", 0, 1)
-    segs = unique(seg)
+    #segs = unique(seg)
+    
+    pixels_per_seg = Dict{Int64, Vector{Int64}}()
+    for linear_ind = eachindex(seg)
+        seg_id = seg[linear_ind]
+        if haskey(pixels_per_seg, seg_id)
+            push!(pixels_per_seg[seg_id], linear_ind)
+        else
+            pixels_per_seg[seg_id] = [linear_ind]
+        end
+    end
+
     callback("Sorting by size", 0, 1)
-    #TODO: this can be _much_ more efficient
-    segs = sort(segs, by=i->Statistics.mean(I[seg .== i] .^ 2))
+    segs = collect(keys(pixels_per_seg))
+    segs = sort(segs, by=seg_id->Statistics.mean(I[pixels_per_seg[seg_id]] .^ 2))
+
     for (i, seg_id) = enumerate(segs)
-        patch = I[seg .== seg_id]
+        patch = I[pixels_per_seg[seg_id]]#I[seg .== seg_id]
         n = length(patch)
         keep = false
         if c_n > min_n

@@ -76,3 +76,34 @@ function pad_filter(kernel, framesize)
     end
     return padded
 end
+
+function savetohdf(vl::FilterLoader, hdfhandle)
+    hdfhandle["/preprocessing/filter_kernel"] = Array(vl.filter)
+    savetohdf(vl.source_loader, hdfhandle)
+end
+
+function BandpassFilterLoader(source_loader::VideoLoader, low::Real, high::Real)
+    fs = framesize(source_loader)
+    filterkernel = generate_bandpass_filter_no_shift(fs, low, high)
+    FilterLoader(source_loader, CUDA.cu(filterkernel))
+end
+
+function generate_bandpass_filter_no_shift(size, low_radius, high_radius)
+    h, w = size
+    filter_mask = zeros(ComplexF32, h, w)
+
+    cy, cx = div.(size, 2)
+
+    for i in 1:h
+        for j in 1:w
+            idist = i <= cy ? i - 1 : h - i
+            jdist = j <= cx ? j - 1 : w - j
+            dist = sqrt(idist^2 + jdist^2)
+            if low_radius <= dist <= high_radius
+                filter_mask[i, j] = 1.0
+            end
+        end
+    end
+
+    return filter_mask
+end

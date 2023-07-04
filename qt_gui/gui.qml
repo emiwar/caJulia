@@ -76,6 +76,10 @@ ApplicationWindow {
             onTriggered: Julia.mergecells();
         }
         Action { 
+            text: qsTr("Motion correct") 
+            onTriggered: Julia.motioncorrect();
+        }
+        Action { 
             text: qsTr("Subtract min") 
             onTriggered: Julia.subtractmin();
         }
@@ -198,9 +202,9 @@ ApplicationWindow {
         RangeSlider {
             Layout.fillWidth: true
             id: viewport1ContrastSlider
-            from: 0
-            to: 2048
-            second.value: 256
+            from: observables.crangemin//0
+            to: observables.crangemax//2048
+            second.value: 32//256
             first.onMoved: {
                 observables.cmin1 = first.value
                 if (sameContrastCheckbox.checked) {

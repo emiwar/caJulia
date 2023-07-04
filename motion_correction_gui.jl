@@ -18,9 +18,9 @@ example_files_server = server_folder .* [
 
 #Full: (1:1440, 1:1080, :)
 manual_cropping_server = [
-    (750:1350, 250:850, 1:3000),
-    (1:1440, 1:1080, 1:3000),
-    (1:1440, 1:1080, 1:3000)
+    (750:1350, 250:850, 1:1000),
+    (1:1440, 1:1080, 1:1000),
+    (1:1440, 1:1080, 1:1000)
 ]
 
 
@@ -53,7 +53,7 @@ function stepTime!(time_diff)
     t = timeSlider.value[]
     new_time = (t - 1 + time_diff + nFrames)%nFrames + 1
     GLMakie.set_close_to!(timeSlider, new_time)
-end
+en
 prevFrameButton = GLMakie.Button(playerControls[1, 3], label="<")
 GLMakie.on((_)->stepTime!(-1), prevFrameButton.clicks)
 nextFrameButton = GLMakie.Button(playerControls[1, 4], label=">")

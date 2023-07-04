@@ -59,3 +59,10 @@ function readframe(vl::SegmentLoader, frame_idx)
         return seg[:, local_frame]
     end
 end
+
+function savetohdf(vl::SegmentLoader, hdfhandle)
+    hdfhandle["/meta/nsegs"] = nsegs(vl)
+    filenames = unique(filename.(vl.sources))
+    hdfhandle["/meta/nvideos"] = length(filenames)
+    hdfhandle["/meta/filenames"] = filenames
+end

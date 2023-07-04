@@ -3,6 +3,7 @@ module VideoLoaders
 export VideoLoader, readseg, readframe, optimalorder, nframes, nsegs, nvideos, framesize, video_idx, framerange, framerange_video, frame2seg
 
 using OrderedCollections, CUDA, HDF5, DataFrames, CSV, ProgressMeter
+import Images
 
 abstract type VideoLoader end
 abstract type FileLoader <: VideoLoader end
@@ -47,7 +48,7 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     if endswith(s, ".nwb")
         baseloader = NWBLoader(s)
     elseif endswith(s, ".hdf5")
-        baseloader = HDFLoader(s, "images", (1:1440, 1:1080,  1:1000))
+        baseloader = HDFLoader(s, "images")#, (1:1440, 1:1080,  1:1000))
     elseif endswith(s, ".h5")
         baseloader = HDFLoader(s, "data")
     else
@@ -56,8 +57,15 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     end
     splitloader = SplitLoader(baseloader, nsplits)
     hostcache = CachedHostLoader(splitloader; max_memory=hostCacheSize)
-    #minSubtr = VideoLoaders.SubtractMinLoader(hostcache)
-    devicecache = CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
+    if endswith(s, ".hdf5") || endswith(s, ".h5")
+        filterkernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0))
+        filterloader = FilterLoader(hostcache, filterkernel)
+        #filterloader = BandpassFilterLoader(hostcache, 2, 100)
+        mcloader = MotionCorrectionLoader(filterloader, (300:600, 125:300))#(600:1200, 250:600))
+        return CachedDeviceLoader(mcloader, max_memory=deviceCacheSize)
+    else
+        return CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
+    end
 end
 
 end
