@@ -65,6 +65,8 @@ function handle_response(response_type::Symbol, data, observables)
         low, high = data
         observables["crangemin"][] = low
         observables["crangemax"][] = high
+    elseif response_type == :filterchanged
+        send_request(conn, :framerange_estimate)
     else
         println("Unhandled response: $response_type")
     end

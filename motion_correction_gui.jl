@@ -6,30 +6,29 @@ using ProgressMeter
 GLMakie.activate!(inline=false)
 include("videoLoaders/videoLoaders.jl")#include("motion_correction.jl")
 
-example_files = "../data/" .* ["../data/recording_20211016_163921.hdf5",
-                 "../data/recording_20220919_135612.hdf5"]
+#example_files = "../data/" .* ["../data/recording_20211016_163921.hdf5",
+#                 "../data/recording_20220919_135612.hdf5"]
 
-server_folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1/2nd batch sep 2022/Oprm1 calimaging 2nd batch sept 2022 - inscopix data/oprm1 day1 20220919/"
-example_files_server = server_folder .* [
-    "recording_20220919_135612.hdf5",
-    "recording_20220919_143826.hdf5",
-    "recording_20220919_144807.hdf5"
-]
+#server_folder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1/2nd batch sep 2022/Oprm1 calimaging 2nd batch sept 2022 - inscopix data/oprm1 day1 20220919/"
+#example_files_server = server_folder .* [
+#    "recording_20220919_135612.hdf5",
+#    "recording_20220919_143826.hdf5",
+#    "recording_20220919_144807.hdf5"
+#]
+example_file = "/mnt/dmclab/Emil/arrowmaze_raw_downsampled/oprm1 day1 20220919/recording_20220919_144807.hdf5"
 
 #Full: (1:1440, 1:1080, :)
-manual_cropping_server = [
-    (750:1350, 250:850, 1:1000),
-    (1:1440, 1:1080, 1:1000),
-    (1:1440, 1:1080, 1:1000)
-]
+#manual_cropping_server = [
+#    (750:1350, 250:850, 1:1000),
+#    (1:1440, 1:1080, 1:1000),
+#    (1:1440, 1:1080, 1:1000)
+#]
 
-
-nwbLoader = VideoLoaders.HDFLoader(example_files_server[3],
-                                   "images", manual_cropping_server[3])
+nwbLoader = VideoLoaders.HDFLoader(example_file, "data", (1:720, 1:540, 1:7000))
 splitLoader = VideoLoaders.SplitLoader(nwbLoader, 20)
 hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
-filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(10.0)))
-mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, (600:1200, 250:600))
+filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0)))
+mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, (300:625, 125:325, 1:3000))#(300:600, 125:300, 1:2000))#(600:1200, 250:600))
 deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader; max_memory=1.0e10)
 #mc = MotionCorrecter(vl)
 #mc.shifts .= [(round(25*cos(2pi*t/40)), round(25*sin(2pi*t/40))) for t=1:mc.nFrames]
@@ -53,7 +52,7 @@ function stepTime!(time_diff)
     t = timeSlider.value[]
     new_time = (t - 1 + time_diff + nFrames)%nFrames + 1
     GLMakie.set_close_to!(timeSlider, new_time)
-en
+end
 prevFrameButton = GLMakie.Button(playerControls[1, 3], label="<")
 GLMakie.on((_)->stepTime!(-1), prevFrameButton.clicks)
 nextFrameButton = GLMakie.Button(playerControls[1, 4], label=">")
@@ -80,7 +79,7 @@ current_frame = GLMakie.lift(timeSlider.value, videoDisplayType) do t, vdt
     end
 end
 
-contrast_range = -128:1024#Int64(maximum(originalVideoDevice))
+contrast_range = -128:4096#Int64(maximum(originalVideoDevice))
 contrast_slider = GLMakie.IntervalSlider(topRow[2, 1], range=contrast_range)
 ax1 = GLMakie.Axis(topRow[3, 1])
 GLMakie.image!(ax1, current_frame, colorrange=contrast_slider.interval,
@@ -99,6 +98,11 @@ ax1.aspect = GLMakie.DataAspect()
 GLMakie.display(fig)
 
 VideoLoaders.fitMotionCorrection!(mcLoader)
+VideoLoaders.clear!(deviceCache)
+
+meanFrame = VideoLoaders.mapreduce(x->x, +, deviceCache, 0.0, dims=2)
+meanFrame ./= VideoLoaders.nframes(deviceCache)
+
 
 import Plots
 import Images
@@ -406,3 +410,53 @@ seg_smoothed = cuDNN.cudnnConvolutionForward(reshape(kernel, 61, 61, 1, 1), padd
 
 
 Plots.heatmap(seg_smoothed[:,:,1,1] |> Array, fmt=:png)
+
+
+
+
+
+
+
+hdfLoader = VideoLoaders.HDFLoader("../fake_videos/fake3.h5", "images")
+splitLoader = VideoLoaders.SplitLoader(hdfLoader, 10)
+hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
+filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0)))
+mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, (200:400, 200:400, 1:500))#(300:600, 125:300, 1:2000))#(600:1200, 250:600))
+deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader; max_memory=1.0e10)
+
+
+function makieims(vl, images...; clim=(-20, 50))
+    nims = length(images)
+    fig = GLMakie.Figure()
+    obs_ims = map(im->GLMakie.lift(im->reshape(Array(im), VideoLoaders.framesize(vl)), im), images)
+    for (i, im)=enumerate(obs_ims)
+        ax = GLMakie.Axis(fig[1, i] )
+        GLMakie.image!(ax, im, colorrange=clim)
+        ax.aspect = GLMakie.DataAspect()
+    end
+    GLMakie.display(fig)
+end
+
+mc_result = VideoLoaders.fitMotionCorrection_v2!(mcLoader;
+                callback=(m,i,n)->println("$m ($i/$n)"))
+N = Float32(length(mcLoader.window[3]))#3000.0)
+sm_frame_unshifted_freq = copy(mc_result.prelim_results.sm_frame_unshifted_freq)
+sm_frame_shifted_freq = copy(mc_result.prelim_results.sm_frame_shifted_freq)
+sm_shifts_forward = copy(mc_result.prelim_results.sm_shifts_forward)
+sm_shifts_backward = copy(mc_result.prelim_results.sm_shifts_backward)
+unshifted_bg_freq = sm_frame_unshifted_freq ./ N
+shifted_bg_freq = zero(unshifted_bg_freq)
+#shifted_bg_freq = sm_frame_shifted_freq ./ N
+#unshifted_bg_freq = zero(shifted_bg_freq)
+im1 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(sm_frame_unshifted_freq)) ./ N);
+im2 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(sm_frame_shifted_freq)) ./ N);
+#im2 = GLMakie.Observable(lensback.b);
+makieims(mcLoader, im1, im2);
+
+
+for i=1:500
+    shifted_bg_freq .= sm_frame_shifted_freq ./ N .- (unshifted_bg_freq .* sm_shifts_forward./ N)
+    unshifted_bg_freq .= sm_frame_unshifted_freq ./ N .- (shifted_bg_freq .* sm_shifts_backward ./ N)    
+end
+im2[] = real.(CUDA.CUFFT.ifft(shifted_bg_freq))
+im1[] = real.(CUDA.CUFFT.ifft(unshifted_bg_freq))

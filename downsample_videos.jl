@@ -21,3 +21,28 @@ HDF5.create_dataset(downsampled_video, "data", UInt16, (div(w,2), div(h, 2), T))
     im = orig_video["images"][:, :, t]
     downsampled_video["data"][:, :, t] = UInt16.(Images.imresize(im, ratio=0.5) .* 4)
 end
+
+import Glob
+baseFolder = "/mnt/dmclab/Vasiliki/Striosomes experiments/Calcium imaging in oprm1/2nd batch sep 2022/Oprm1 calimaging 2nd batch sept 2022 - inscopix data/"
+for folder in Glob.glob("*", baseFolder)
+    folderName = split(folder, "/")[end]
+    println(folderName)
+    vidName = ""
+    vidPath = ""
+    for vp in Glob.glob("*.hdf5", folder)
+        if endswith(vp, "_gpio.hdf5")
+            continue
+        end
+        vidPath = vp
+        vidName = split(vidPath, "/")[end]
+    end
+    mkdir(results_folder * folderName)
+    orig_video = HDF5.h5open(vidPath, "r")
+    downsampled_video = HDF5.h5open(results_folder * "/" * folderName * "/" * vidName, "w")
+    w, h, T = size(orig_video["images"])
+    HDF5.create_dataset(downsampled_video, "data", UInt16, (div(w,2), div(h, 2), T))
+    @showprogress "$vidName" for t = 1:T
+        im = orig_video["images"][:, :, t]
+        downsampled_video["data"][:, :, t] = UInt16.(Images.imresize(im, ratio=0.5) .* 4)
+    end
+end

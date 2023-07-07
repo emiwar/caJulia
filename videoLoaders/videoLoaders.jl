@@ -51,6 +51,8 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
         baseloader = HDFLoader(s, "images")#, (1:1440, 1:1080,  1:1000))
     elseif endswith(s, ".h5")
         baseloader = HDFLoader(s, "data")
+    elseif endswith(s, ".csv")
+        return openmultivideo(s; nsplits, hostCacheSize, deviceCacheSize)
     else
         #TODO: show error message
         return EmptyLoader()
@@ -66,6 +68,25 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     else
         return CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
     end
+end
+
+function openmultivideo(s; nsplits, hostCacheSize, deviceCacheSize)
+    pathPrefix = s[1:end-length(split(s, "/")[end])]
+    videolist = CSV.File(s,comment="#")#DataFrames.DataFrame(CSV.File(s,comment="#"))
+    sources = map(videolist) do r #map(eachrow(videolist))
+        hdfLoader = HDFLoader(pathPrefix * r.filename, r.hdfKey)
+        SplitLoader(hdfLoader[:, :, 1:100], nsplits)
+    end
+    segs_per_video = [((i-1)*nsplits+1):i*nsplits for i=1:length(sources)]
+    baseloader = MultiVideoLoader(sources, segs_per_video)
+    hostcache = CachedHostLoader(baseloader; max_memory=hostCacheSize)
+
+    filterkernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0))
+    filterloader = FilterLoader(hostcache, filterkernel)
+    #filterloader = BandpassFilterLoader(hostcache, 2, 100)
+    mcloader = MotionCorrectionLoader(filterloader, (300:600, 125:300))
+
+    return CachedDeviceLoader(mcloader, max_memory=deviceCacheSize)
 end
 
 end

@@ -43,11 +43,26 @@ end
 
 Y .+= randn(Float32, h-100, w-100, T);
 
-HDF5.h5open("../fake_videos/fake2.h5", "w") do fid
-    fid["/images"] = Int16.(round.(10.0 .+ 10 .* Y))
+
+lensBg = zeros(Float32, h-100, w-100)
+n_flares = 5
+for flare=1:n_flares
+    c = [50 + rand()*(w - 100), 50 + rand()*(h - 100)]
+    sigma = 5+5*rand()
+    cov = -10 + 20*rand()
+    sigInv = inv([sigma^2 cov; cov sigma^2])
+    lensBg .+= (rand()*20-4) .* [exp(-0.5*(([x,y]-c)'*sigInv*([x,y]-c)))
+                                 for y=1:(h-100), x=1:(w-100)]
+end
+
+Y .+= lensBg
+
+HDF5.h5open("../fake_videos/fake3.h5", "w") do fid
+    fid["/images"] = Int16.(round.(100.0 .+ 100 .* Y))
     fid["/ground_truth/A"] = A
     fid["/ground_truth/C"] = C
     fid["/ground_truth/S"] = S
     fid["/ground_truth/gammas"] = gammas
     fid["/ground_truth/shifts"] = shifts
+    fid["/ground_truth/lensBg"] = lensBg
 end

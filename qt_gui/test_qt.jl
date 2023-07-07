@@ -129,6 +129,12 @@ function run_gui()
         timer = QTimer(),
         observables = observables
     )
+    on(observables["xmin"]) do xmin
+        println("Frame $(observables["frame_n"][])")
+        println("X: [$(observables["xmin"][]), $(observables["xmax"][])]")
+        println("Y: [$(observables["ymin"][]), $(observables["ymax"][])]")
+        println("")
+    end
     send_request(conn, :rawframe, 1)
     QML.exec()
     return observables
