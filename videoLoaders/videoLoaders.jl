@@ -1,6 +1,6 @@
 module VideoLoaders
 
-export VideoLoader, readseg, readframe, optimalorder, nframes, nsegs, nvideos, framesize, video_idx, framerange, framerange_video, frame2seg
+export VideoLoader, readseg, readframe, optimalorder, nframes, nsegs, nvideos, framesize, video_idx, framerange, framerange_video, frame2seg, outputlabel
 
 using OrderedCollections, CUDA, HDF5, DataFrames, CSV, ProgressMeter
 import Images
@@ -24,6 +24,7 @@ readframe(vl::EmptyLoader, i) = zeros(Int16, framesize(vl))
 location(::EmptyLoader) = :nowhere
 frame2seg(::EmptyLoader, _) = 1
 video_idx(::EmptyLoader, _) = 1
+optimalorder(::EmptyLoader) = 1:1
 
 function Base.mapreduce(f::Function, op::Function, vl::VideoLoader, init; dims=2,
                         callback=(_,_)->nothing)
@@ -60,10 +61,11 @@ function openvideo(s::String; nsplits=10, hostCacheSize=3.2e10,
     splitloader = SplitLoader(baseloader, nsplits)
     hostcache = CachedHostLoader(splitloader; max_memory=hostCacheSize)
     if endswith(s, ".hdf5") || endswith(s, ".h5")
-        filterkernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0))
-        filterloader = FilterLoader(hostcache, filterkernel)
-        #filterloader = BandpassFilterLoader(hostcache, 2, 100)
-        mcloader = MotionCorrectionLoader(filterloader, (300:600, 125:300))#(600:1200, 250:600))
+        #filterkernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0))
+        #filterloader = FilterLoader(hostcache, filterkernel)
+        filterloader = BandpassFilterLoader(hostcache, 2, 100)
+        fullfs = framesize(filterloader)
+        mcloader = MotionCorrectionLoader(filterloader, [(1:fullfs[1], 1:fullfs[2], 1:1000)])#(600:1200, 250:600))
         return CachedDeviceLoader(mcloader, max_memory=deviceCacheSize)
     else
         return CachedDeviceLoader(hostcache, max_memory=deviceCacheSize)
@@ -75,16 +77,21 @@ function openmultivideo(s; nsplits, hostCacheSize, deviceCacheSize)
     videolist = CSV.File(s,comment="#")#DataFrames.DataFrame(CSV.File(s,comment="#"))
     sources = map(videolist) do r #map(eachrow(videolist))
         hdfLoader = HDFLoader(pathPrefix * r.filename, r.hdfKey)
-        SplitLoader(hdfLoader[:, :, 1:100], nsplits)
+        SplitLoader(hdfLoader, nsplits)
     end
     segs_per_video = [((i-1)*nsplits+1):i*nsplits for i=1:length(sources)]
-    baseloader = MultiVideoLoader(sources, segs_per_video)
+    output_labels = String.(map(r->r.resultKey, videolist))
+    baseloader = MultiVideoLoader(sources, segs_per_video, output_labels)
     hostcache = CachedHostLoader(baseloader; max_memory=hostCacheSize)
-
     filterkernel = Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0))
     filterloader = FilterLoader(hostcache, filterkernel)
     #filterloader = BandpassFilterLoader(hostcache, 2, 100)
-    mcloader = MotionCorrectionLoader(filterloader, (300:600, 125:300))
+    mcwindows = map(enumerate(videolist)) do (i, r) #map(eachrow(videolist))
+        (r.mcwindowxmin:r.mcwindowxmax,
+         r.mcwindowymin:r.mcwindowymax,
+         framerange_video(filterloader, i)[1:3000])
+    end
+    mcloader = MotionCorrectionLoader(filterloader, mcwindows)
 
     return CachedDeviceLoader(mcloader, max_memory=deviceCacheSize)
 end

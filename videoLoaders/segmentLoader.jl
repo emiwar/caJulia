@@ -62,7 +62,16 @@ end
 
 function savetohdf(vl::SegmentLoader, hdfhandle)
     hdfhandle["/meta/nsegs"] = nsegs(vl)
-    filenames = unique(filename.(vl.sources))
+    filenames = unique(filename.(vl.sources, 1))
     hdfhandle["/meta/nvideos"] = length(filenames)
     hdfhandle["/meta/filenames"] = filenames
+end
+
+function loadfromhdf(vl::SegmentLoader, hdfhandle)
+    if haskey(hdfhandle, "/meta/nsegs") && read(hdfhandle, "/meta/nsegs") != nsegs(vl)
+        @warn "Loaded file has $(read(hdfhandle, "/meta/nsegs")) segments, existing loader has $(nsegs(vl))"
+    end
+    if haskey(hdfhandle, "/meta/nvideos") && read(hdfhandle, "/meta/nvideos") != nvideos(vl)
+        @warn "Loaded file has $(read(hdfhandle, "/meta/nvideos")) segments, existing loader has $(nvideos(vl))"
+    end
 end

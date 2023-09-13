@@ -33,6 +33,16 @@ function saveresult(Qfilename)
     submit_job(conn, :saveresult, filename)
 end
 
+function openresult(Qfilename)
+    #TODO: must be possible to parse this safer
+    if Sys.iswindows()
+        filename = String(QString(Qfilename))[9:end]
+    else
+        filename = String(QString(Qfilename))[8:end]
+    end
+    submit_job(conn, :loadsolution, filename)
+end
+
 function resetworker()
     submit_job(conn, :reset)
 end
@@ -173,4 +183,17 @@ function pandragtrace(rel_x, rel_y, observables)
         observables["tmin"][] = tmin
         observables["tmax"][] = tmax
     end
+end
+
+
+function deleteselectedcell(observables)
+    cell_id = observables["selected_cell"][]
+    if cell_id > 0
+        submit_job(conn, :deletecell, cell_id)
+    end
+    println(cell_id)
+end
+
+function clearfilter()
+    submit_job(conn, :clearfilter)
 end

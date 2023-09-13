@@ -56,6 +56,7 @@ end
 struct MultiVideoLoader{T} <: SegmentLoader
     sources::Vector{T}
     segs_per_video::Vector{UnitRange{Int64}}
+    output_labels::Vector{String}
 end
 Base.eltype(::MultiVideoLoader{T}) where T = eltype(T)
 Base.eltype(::Type{MultiVideoLoader{T}}) where T = eltype(T)
@@ -100,5 +101,13 @@ function filename(vl::MultiVideoLoader, i::Integer)
     video_i = video_idx(vl, i)
     local_idx = i - first(vl.segs_per_video[video_i]) + 1
     filename(vl.sources[video_i], local_idx)
+end
+
+function outputlabel(vl::MultiVideoLoader, vid_i::Integer)
+    vl.output_labels[vid_i]
+end
+
+function outputlabel(vl::VideoLoader, vid_i::Integer)
+    outputlabel(vl.source_loader, vid_i)
 end
 

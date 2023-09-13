@@ -3,7 +3,7 @@ macro powerTuple(variable, n)
     Meta.parse("("*join(("$(string(variable))^$i" for i=1:n), ", ")*")")
 end
 
-function negentropy_img(vl::VideoLoader)
+function negentropy_img(vl::VideoLoaders.VideoLoader)
     pows = mapreduce(y->(y, y^2, y^3, y^4), .+, vl,
                         (0.0, 0.0, 0.0, 0.0), dims=2)
     T = VideoLoaders.nframes(vl)
@@ -31,7 +31,7 @@ function negentropy_approx_no_mean(Y)
     @. (y3^2 / y2^3)/12.0 + y4/(y2^2) / 48.0
 end
 
-function negentropy_img_per_video(vl::VideoLoader; callback)
+function negentropy_img_per_video(vl::VideoLoaders.VideoLoader; callback)
     nvids = nvideos(vl)
     npixels = prod(framesize(vl))
     nsegs = VideoLoaders.nsegs(vl)

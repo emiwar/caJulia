@@ -31,8 +31,8 @@ function startworker(jobs, status, responses)
         end
         remotecall_fetch(proc_id, status) do status
             vltype = VideoLoaders.CachedDeviceLoader{VideoLoaders.CachedHostLoader{
-                VideoLoaders.SplitLoader{VideoLoaders.HDFLoader{Int16}}, 
-                Int16}}
+                VideoLoaders.SplitLoader{VideoLoaders.HDFLoader{UInt16}}, 
+                UInt16}}
             soltype = Sol{Tuple{PerVideoBackground, PerVideoRank1Background}}
             put!(status, ("Compiling video loader", 0.7))
             Base.eval(VideoLoaders, :(precompile(openvideo, (String,))))

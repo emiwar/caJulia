@@ -12,6 +12,7 @@ import LinearAlgebra
 import VideoIO
 import CSV
 import DataFrames
+using InteractiveUtils
 using ProgressMeter #TODO: should remove this dependency
 
 println("Imports done")
@@ -86,10 +87,11 @@ function processrequest(requesttype, data, status, responses, workerstate)
         else
             put!(status, ("Loading frame $frameno", -1.0))
             if VideoLoaders.location(videoloader) == :device
-                frame = VideoLoaders.readframe(videoloader.source_loader, frameno)#::Matrix{Int16} 
+                frame = Array(VideoLoaders.readframe(videoloader, frameno))#::Matrix{Int16} 
             else
                 frame = VideoLoaders.readframe(videoloader, frameno)#::Matrix{Int16} 
             end
+            frame = reshape(frame, VideoLoaders.framesize(videoloader))
             put!(responses, (:rawframe, frame))
             put!(status, ("Loaded frame $frameno", 1.0))
         end
@@ -152,7 +154,7 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
     if jobtype == :loadvideo
         filename = data
         put!(status, ("Loading $filename", -1.0))
-        workerstate.videoloader = VideoLoaders.openvideo(filename; nsplits=50)
+        workerstate.videoloader = VideoLoaders.openvideo(filename; nsplits=100)
         workerstate.solution = Sol(workerstate.videoloader)
         put!(responses, (:videoloaded, filename))
         put!(responses, (:nframes, VideoLoaders.nframes(workerstate.videoloader)))
@@ -204,7 +206,7 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         put!(status, ("Subtracted min", 1.0))
     elseif jobtype == :motioncorrect
         put!(status, ("Motion correcting", 0.0))
-        VideoLoaders.fitMotionCorrection!(videoloader.source_loader; callback)
+        VideoLoaders.fitMotionCorrection_v2!(videoloader.source_loader; callback)
         VideoLoaders.clear!(videoloader)
         put!(responses, (:motioncorrected, nothing))
         put!(status, ("Motion corrected", 1.0))
@@ -238,6 +240,23 @@ function processjob(jobtype, data, jobs, status, responses, jobqueue, workerstat
         workerstate.behaviorvideo = data
         put!(responses, (:behaviorloaded, data))
         put!(status, ("Opened $data for behavior.", -1.0))
+    elseif jobtype == :loadsolution
+        filename = data
+        put!(status, ("Loading $filename", -1.0))
+        workerstate.solution = from_hdf(filename, workerstate.videoloader)
+        put!(status, ("Solution read sucessfully from $filename, plotting data.", -1.0))
+        frame = reshape(Array(log10.(solution.I)), solution.frame_size)
+        put!(responses, (:initframe, frame))
+        send_footprints(workerstate, status, responses)
+        put!(responses, (:solutionloaded, filename))
+        GC.gc()
+        put!(status, ("Loaded $filename", 1.0))
+    elseif jobtype == :deletecell
+        cell_id = data
+        put!(status, ("Deleting cell $cell_id", 0.0))
+        deleteCell!(solution, cell_id)
+        put!(status, ("Deleted cell $cell_id", 1.0))
+        send_footprints(workerstate, status, responses)
     end
 end
 

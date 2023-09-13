@@ -67,6 +67,16 @@ function handle_response(response_type::Symbol, data, observables)
         observables["crangemax"][] = high
     elseif response_type == :filterchanged
         send_request(conn, :framerange_estimate)
+        send_request(conn, :raw, observables["frame_n"][])
+    elseif response_type == :solutionloaded
+        send_request(conn, :framerange_estimate)
+        send_request(conn, :raw, observables["frame_n"][])
+        send_request(conn, :reconstructedframe, observables["frame_n"][])
+        send_request(conn, :initframe)
+        cell_id = observables["selected_cell"][] 
+        if cell_id > 0
+            send_request(conn, :trace, cell_id)
+        end
     else
         println("Unhandled response: $response_type")
     end

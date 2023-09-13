@@ -100,3 +100,13 @@ end
 function savetohdf(vl::CachedLoader, hdfhandle)
     savetohdf(vl.source_loader, hdfhandle)
 end
+
+function loadfromhdf(vl::CachedHostLoader, hdfhandle)
+    loadfromhdf(vl.source_loader, hdfhandle)
+end
+
+function loadfromhdf(vl::CachedDeviceLoader, hdfhandle)
+    loadfromhdf(vl.source_loader, hdfhandle)
+    clear!(vl)
+    GC.gc()
+end

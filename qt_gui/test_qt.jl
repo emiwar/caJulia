@@ -71,8 +71,8 @@ function init_observables()
     observables["traceCol"] = Observable("#000000")
     observables["tmin"] = Observable(0)
     observables["tmax"] = Observable(1)
-    observables["crangemin"] = Observable(-256.0)
-    observables["crangemax"] = Observable(256.0)
+    observables["crangemin"] = Observable(-512.0)
+    observables["crangemax"] = Observable(2048.0)
     on((_)->(@emit updateDisplay(6)), observables["traceS"])
     on((_)->(@emit updateDisplay(6)), observables["traceC"])
     on((_)->(@emit updateDisplay(6)), observables["traceR"])
@@ -119,6 +119,9 @@ function run_gui()
     @qmlfunction zoomscrolltrace
     @qmlfunction pandragtrace
     @qmlfunction motioncorrect
+    @qmlfunction openresult
+    @qmlfunction deleteselectedcell
+    @qmlfunction clearfilter
     observables = init_observables()
     QML.loadqml("qt_gui/gui.qml",
         paint_cfunction1 = video_canvas(raw_frame, observables["cmin1"], observables["cmax1"], observables["xmin"], observables["xmax"], observables["ymin"], observables["ymax"]),
@@ -129,18 +132,19 @@ function run_gui()
         timer = QTimer(),
         observables = observables
     )
-    on(observables["xmin"]) do xmin
-        println("Frame $(observables["frame_n"][])")
-        println("X: [$(observables["xmin"][]), $(observables["xmax"][])]")
-        println("Y: [$(observables["ymin"][]), $(observables["ymax"][])]")
-        println("")
-    end
+    #on(observables["xmin"]) do xmin
+    #    println("Frame $(observables["frame_n"][])")
+    #    println("X: [$(observables["xmin"][]), $(observables["xmax"][])]")
+    #    println("Y: [$(observables["ymin"][]), $(observables["ymax"][])]")
+    #    println("")
+    #end
     send_request(conn, :rawframe, 1)
     QML.exec()
     return observables
 end
 obs = run_gui();
 send_request(conn, :refreshvideo)
+send_request(conn, :framerange_estimate)
 
 
 

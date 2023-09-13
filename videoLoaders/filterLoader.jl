@@ -82,6 +82,16 @@ function savetohdf(vl::FilterLoader, hdfhandle)
     savetohdf(vl.source_loader, hdfhandle)
 end
 
+function loadfromhdf(vl::FilterLoader, hdfhandle)
+    if haskey(hdfhandle, "/preprocessing/filter_kernel")
+        vl.filter .= hdfhandle["/preprocessing/filter_kernel"] |> Array |> CUDA.cu
+    else
+        @warn "No filter kernel in laoded file."
+    end
+    loadfromhdf(vl.source_loader, hdfhandle)
+end
+
+
 function BandpassFilterLoader(source_loader::VideoLoader, low::Real, high::Real)
     fs = framesize(source_loader)
     filterkernel = generate_bandpass_filter_no_shift(fs, low, high)

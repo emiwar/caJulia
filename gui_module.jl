@@ -50,8 +50,10 @@ function setupImages(guiState::GUIState)
 
     guiState.fig[1, 1] = topRow = GridLayout()
 
-    current_frame = lift((vl, t)->Main.readframe(vl.source_loader, t), guiState.vid, currentTime(guiState))
-    Y_extrema = Observable((0, 500))#lift(Main.extrema, guiState.vid)
+    current_frame = lift(guiState.vid, currentTime(guiState)) do vl, t
+        reshape(Array(Main.readframe(vl, t)), Main.framesize(vl))
+    end
+    Y_extrema = Observable((-256, 2048))#lift(Main.extrema, guiState.vid)
     contrast_range = lift((ex)->LinRange(ex[1], ex[2], 200), Y_extrema)
     contrast_slider = IntervalSlider(topRow[2, 1],
                                      range=contrast_range)
@@ -133,8 +135,8 @@ function setupTraces(guiState::GUIState)
         Ch = Array(s.C)
         Rh = Array(s.R)
         for i=1:size(Ch, 2)
-            lines!(traceAxis, Rh[:, i] .- 200*i, color=:gray, linewidth=0.5)
-            l = lines!(traceAxis, Ch[:, i] .- 200*i, color=s.colors[i], linewidth=1.0)
+            lines!(traceAxis, Rh[:, i] .- 1000*i, color=:gray, linewidth=0.5)
+            l = lines!(traceAxis, Ch[:, i] .- 1000*i, color=s.colors[i], linewidth=1.0)
             objToI[l] = i
         end
         xlims!(traceAxis, 1, size(Ch, 1))

@@ -1,4 +1,3 @@
-
 import QtQuick 2.0
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.0
@@ -35,6 +34,10 @@ ApplicationWindow {
         Action { 
             text: qsTr("Open behavior video") 
             onTriggered: openBehaviorDialog.visible = true;
+        }
+        Action { 
+            text: qsTr("Open result") 
+            onTriggered: openResultsDialog.visible = true;
         }
         Action { 
             text: qsTr("Ping worker") 
@@ -82,6 +85,14 @@ ApplicationWindow {
         Action { 
             text: qsTr("Subtract min") 
             onTriggered: Julia.subtractmin();
+        }
+        Action { 
+            text: qsTr("Delete selected cell") 
+            onTriggered: Julia.deleteselectedcell(observables);
+        }
+        Action { 
+            text: qsTr("Clear filter") 
+            onTriggered: Julia.clearfilter();
         }
     }
     Menu {
@@ -465,6 +476,9 @@ ApplicationWindow {
                 lastY = mouse.y
             }
         }
+        Keys.onPressed: {
+            console.log(event.key)
+        }
     }
 
     RowLayout {
@@ -577,7 +591,6 @@ ApplicationWindow {
         }
     }
   }
-
   JuliaSignals {
     signal updateDisplay(var disp_id)
     onUpdateDisplay: {
@@ -631,6 +644,22 @@ ApplicationWindow {
     selectFolder: false
     onAccepted: {
         Julia.openbehaviorvideo(openBehaviorDialog.fileUrl)
+    }
+    //onRejected: {
+    //    console.log("Canceled")
+    //}
+    //Component.onCompleted: visible = true
+  }
+
+  FileDialog {
+    id: openResultsDialog
+    title: "Open results"
+    folder: shortcuts.home
+    selectMultiple: false
+    selectExisting: true
+    selectFolder: false
+    onAccepted: {
+        Julia.openresult(openResultsDialog.fileUrl)
     }
     //onRejected: {
     //    console.log("Canceled")

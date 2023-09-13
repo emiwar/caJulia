@@ -135,3 +135,17 @@ function initBackgrounds!(vl::VideoLoader, sol::Sol; callback)
     end
     callback("Initializing backgrounds", N, N)
 end
+
+function deleteCell!(sol::Sol, i::Integer)
+    to_delete = zeros(Bool, ncells(sol))
+    to_delete[i] = true
+    Ad = CUDA.CuArray(sol.A)
+    sol.A = CUDA.cu(SparseArrays.sparse(Array(Ad[.!to_delete, :])))
+    sol.R = sol.R[:, .!to_delete]
+    sol.C = sol.C[:, .!to_delete]
+    sol.S = sol.S[:, .!to_delete]
+    sol.gammas = sol.gammas[.!to_delete]
+    sol.lambdas = sol.lambdas[.!to_delete]
+    sol.colors = sol.colors[.!to_delete]
+    nothing
+end
