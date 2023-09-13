@@ -4,7 +4,8 @@ import cuDNN
 import Images
 using ProgressMeter
 GLMakie.activate!(inline=false)
-include("videoLoaders/videoLoaders.jl")#include("motion_correction.jl")
+include("videoLoaders/videoLoaders.jl")
+#include("motion_correction.jl")
 
 #example_files = "../data/" .* ["../data/recording_20211016_163921.hdf5",
 #                 "../data/recording_20220919_135612.hdf5"]
@@ -27,12 +28,24 @@ example_file = "/mnt/dmclab/Emil/arrowmaze_raw_downsampled/oprm1 day1 20220919/r
 nwbLoader = VideoLoaders.HDFLoader(example_file, "data", (1:720, 1:540, 1:7000))
 splitLoader = VideoLoaders.SplitLoader(nwbLoader, 20)
 hostCache = VideoLoaders.CachedHostLoader(splitLoader; max_memory=3.2e10)
-filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0)))
-mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, (300:625, 125:325, 1:3000))#(300:600, 125:300, 1:2000))#(600:1200, 250:600))
+#filterLoader = VideoLoaders.FilterLoader(hostCache, Images.OffsetArrays.no_offset_view(Images.Kernel.DoG(5.0)))
+filterLoader = VideoLoaders.BandpassFilterLoader(hostCache, 1, 300)
+#(300:600, 125:300, 1:3000))#(320:380, 80:140, 1:3000)#(600:1200, 250:600))
+mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, [(320:380, 80:140, 1:3000)])
 deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader; max_memory=1.0e10)
 #mc = MotionCorrecter(vl)
 #mc.shifts .= [(round(25*cos(2pi*t/40)), round(25*sin(2pi*t/40))) for t=1:mc.nFrames]
 #@CUDA.time shiftedVideoDevice = loadCorrectedSeg!(mc, vl, 1);
+
+deviceCache = VideoLoaders.openvideo("/mnt/dmclab/Emil/arrowmaze_raw_downsampled/animal6_v2_with_mcwindows.csv"; nsplits=100)
+mcLoader = deviceCache.source_loader
+filterLoader = mcLoader.source_loader
+hostCache = filterLoader.source_loader
+
+mc_result = VideoLoaders.fitMotionCorrection_v2!(mcLoader;
+                callback=(m,i,n)->println("$m ($i/$n)"));
+VideoLoaders.clear!(deviceCache)
+
 
 fig = GLMakie.Figure()
 
@@ -61,10 +74,20 @@ GLMakie.on((_)->stepTime!(1), nextFrameButton.clicks)
 fig[1, 1] = topRow = GLMakie.GridLayout()
 
 #CUDA.synchronize()
-videoDisplayType = GLMakie.Observable(:original)
+videoDisplayType = GLMakie.Observable(:motionCorrected)
 
 freq_slider = GLMakie.IntervalSlider(topRow[1, 1], range=0:500)
 
+#fs = VideoLoaders.framesize(filterLoader)
+#newFilter = CUDA.cu(VideoLoaders.generate_bandpass_filter_no_shift(fs, 1, 300))
+#filterLoader.filter .= newFilter
+#    filterLoader.filter .= newFilter
+#GLMakie.on(freq_slider.interval) do (lo, hi)
+#    fs = VideoLoaders.framesize(filterLoader)
+#    newFilter = CUDA.cu(VideoLoaders.generate_bandpass_filter_no_shift(fs, lo, hi))
+#    filterLoader.filter .= newFilter
+#    videoDisplayType[] = videoDisplayType[]
+#end
 current_frame = GLMakie.lift(timeSlider.value, videoDisplayType) do t, vdt
     if vdt == :original
         return Float32.(VideoLoaders.readframe(hostCache, t))
@@ -79,7 +102,7 @@ current_frame = GLMakie.lift(timeSlider.value, videoDisplayType) do t, vdt
     end
 end
 
-contrast_range = -128:4096#Int64(maximum(originalVideoDevice))
+contrast_range = -256:1024#4096#Int64(maximum(originalVideoDevice))
 contrast_slider = GLMakie.IntervalSlider(topRow[2, 1], range=contrast_range)
 ax1 = GLMakie.Axis(topRow[3, 1])
 GLMakie.image!(ax1, current_frame, colorrange=contrast_slider.interval,
@@ -428,7 +451,7 @@ deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader; max_memory=1.0e10)
 function makieims(vl, images...; clim=(-20, 50))
     nims = length(images)
     fig = GLMakie.Figure()
-    obs_ims = map(im->GLMakie.lift(im->reshape(Array(im), VideoLoaders.framesize(vl)), im), images)
+    obs_ims = map(im->GLMakie.lift(im->reshape(Array(im), VideoLoaders.framesize(mcLoader)), im), images)
     for (i, im)=enumerate(obs_ims)
         ax = GLMakie.Axis(fig[1, i] )
         GLMakie.image!(ax, im, colorrange=clim)
@@ -438,8 +461,8 @@ function makieims(vl, images...; clim=(-20, 50))
 end
 
 mc_result = VideoLoaders.fitMotionCorrection_v2!(mcLoader;
-                callback=(m,i,n)->println("$m ($i/$n)"))
-N = Float32(length(mcLoader.window[3]))#3000.0)
+                callback=(m,i,n)->println("$m ($i/$n)"));
+N = Float32(length(mcLoader.windows[1][3]))#3000.0)
 sm_frame_unshifted_freq = copy(mc_result.prelim_results.sm_frame_unshifted_freq)
 sm_frame_shifted_freq = copy(mc_result.prelim_results.sm_frame_shifted_freq)
 sm_shifts_forward = copy(mc_result.prelim_results.sm_shifts_forward)
@@ -451,12 +474,234 @@ shifted_bg_freq = zero(unshifted_bg_freq)
 im1 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(sm_frame_unshifted_freq)) ./ N);
 im2 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(sm_frame_shifted_freq)) ./ N);
 #im2 = GLMakie.Observable(lensback.b);
-makieims(mcLoader, im1, im2);
+makieims(mcLoader, im1, im2; clim=(-200, 400));
 
 
-for i=1:500
+for i=1:200
     shifted_bg_freq .= sm_frame_shifted_freq ./ N .- (unshifted_bg_freq .* sm_shifts_forward./ N)
     unshifted_bg_freq .= sm_frame_unshifted_freq ./ N .- (shifted_bg_freq .* sm_shifts_backward ./ N)    
 end
 im2[] = real.(CUDA.CUFFT.ifft(shifted_bg_freq))
 im1[] = real.(CUDA.CUFFT.ifft(unshifted_bg_freq))
+
+
+
+
+vl = mcLoader
+first_frame = VideoLoaders.readframe(vl.source_loader, vl.window[3][1])[vl.window[1:2]...]
+prelim_results = VideoLoaders.fitToFrame(vl, first_frame, vl.window)
+VideoLoaders.shiftlensbgbetweenvideos!(mcLoader)
+im1 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(prelim_results.sm_frame_unshifted_freq[:,:,1])) ./ 1000);
+im2 = GLMakie.Observable(real.(CUDA.CUFFT.ifft(prelim_results.sm_frame_shifted_freq[:,:,1])) ./ 1000);
+makieims(vl, im1, im2)
+im2[] = real.(CUDA.CUFFT.ifft(prelim_results.shifted_bg_freq[:,:,1]))
+im1[] = real.(CUDA.CUFFT.ifft(prelim_results.unshifted_bg_freq[:,:,1]))
+
+
+target_frame = real.(CUDA.CUFFT.ifft(prelim_results.shifted_bg_freq[:,:,1]))
+w, h = VideoLoaders.framesize(vl)
+T = VideoLoaders.nframes(vl)
+
+full_results = VideoLoaders.fitToFrame(vl, target_frame, (1:w, 1:h, 1:T);
+                          applyLensBg=true, callback=(m,i,n)->println("$m ($i/$n)"))
+#N = [length(intersect(1:1000, VideoLoaders.framerange(vl, vi))) for vi=1:VideoLoaders.nvideos(vl)]
+#N = Float32.(CUDA.CuArray(reshape(max.(N, 1), 1, 1, VideoLoaders.nvideos(vl))))
+
+
+sm = CUDA.zeros(Float32, VideoLoaders.framesize(filterLoader)...,
+                VideoLoaders.nvideos(filterLoader))
+sqrsm = zero(sm)
+@showprogress for seg_id = 1:20#VideoLoaders.optimalorder(filterLoader)
+    vid_id = VideoLoaders.video_idx(filterLoader, seg_id)
+    seg = VideoLoaders.readseg(filterLoader, seg_id)
+    sm[:, :, vid_id] .+= sum(seg, dims=3)
+    sqrsm[:, :, vid_id] .+= sum(seg .^ 2, dims=3)
+end
+
+std = sqrsm ./ 3000 - ((sm ./ 3000.0) .^ 2)
+
+
+
+
+
+vl = mcLoader
+first_frames = map(vl.windows) do win
+    VideoLoaders.readframe(vl.source_loader, win[3][1])[win[1:2]...]
+end
+callback=(m,i,n)->println("$m ($i/$n)")
+prelim_callback = (m, i, N)->callback("[Prelim] $m", i, N)
+prelim_results = VideoLoaders.fitToFrame(vl, first_frames, vl.windows;
+                                         callback=prelim_callback)
+
+HDF5.h5open("mc_test2_anim6.h5", "w") do fid
+    fid["/motion_correction/shifts"] = VideoLoaders.mcshifts(mcLoader)
+    fid["/motion_correction/phaseDiffs"] = VideoLoaders.mcphasediffs(mcLoader)
+    fid["/motion_correction/lensBg"] = Array(mcLoader.lensBg)
+end
+
+
+vl = mcLoader
+first_frames = map(vl.windows) do win
+    VideoLoaders.readframe(vl.source_loader, win[3][1])[win[1:2]...]
+end
+prelim_callback = (m, i, N)->callback("[Prelim] $m", i, N)
+prelim_results = VideoLoaders.fitToFrame(vl, first_frames, vl.windows;
+                            callback=prelim_callback)
+
+target_frame = real.(CUDA.CUFFT.ifft(prelim_results.shifted_bg_freq[:,:,1]))
+#extra_wins = [(290:600, 200:450, 1:7000)]
+#target_frames = [target_frame[extra_wins[i][1:2]...] for i=1:VideoLoaders.nvideos(vl)]
+#prelim_results2 = VideoLoaders.fitToFrame(vl, target_frames, extra_wins;
+#                            callback=prelim_callback, applyLensBg=true)
+#VideoLoaders.clear!(deviceCache)
+GLMakie.lines(mcLoader.shifts[:,1])
+GLMakie.lines!(mcLoader.shifts[:,2])
+
+zeroPaddedTarget = zero(target_frame)
+zeroPaddedTarget[extra_wins[1][1:2]...] = target_frame[extra_wins[1][1:2]...]
+
+w, h = VideoLoaders.framesize(vl)
+full_window = [(1:w,1:h,VideoLoaders.framerange_video(vl, i))
+                for i=1:VideoLoaders.nvideos(vl)]
+prelim_results3 = VideoLoaders.fitToFrame(vl, [zeroPaddedTarget], full_window;
+                            callback=prelim_callback, applyLensBg=true)
+
+
+
+
+
+
+function recalcLensBg(vl::VideoLoaders.MotionCorrectionLoader, callback=(_,_,_)->nothing)
+    nvids = VideoLoaders.nvideos(vl)
+    fullfs = VideoLoaders.framesize(vl)
+    sm_shifts_forward = CUDA.zeros(ComplexF32, fullfs..., nvids)
+    sm_shifts_backward = CUDA.zeros(ComplexF32, fullfs..., nvids)
+    sm_frame_unshifted = CUDA.zeros(Float32, fullfs..., nvids)
+    sm_frame_shifted_freq = CUDA.zeros(ComplexF32, fullfs..., nvids)
+    freqs1 = -Float32(2pi) .* CUDA.CUFFT.fftfreq(fullfs[1], 1.0f0) |> CUDA.CuArray
+    freqs2 = -Float32(2pi) .* CUDA.CUFFT.fftfreq(fullfs[2], 1.0f0) |> CUDA.CuArray
+    for (i, seg_id) = enumerate(VideoLoaders.optimalorder(vl.source_loader))
+        vid_idx = VideoLoaders.video_idx(vl, seg_id)
+        seg = VideoLoaders.readseg(vl.source_loader, seg_id)
+        for (j, f) in enumerate(VideoLoaders.framerange(vl, seg_id))
+            sm_frame_unshifted[:, :, vid_idx] .+= view(seg, :, :, j)
+            shiftx = vl.shifts[f, 1]
+            shifty = vl.shifts[f, 2]
+            phaseDiff = vl.phaseDiffs[f]
+            forward_shift = cis.((freqs1 .* shiftx .+ freqs2' .* shifty) .+ phaseDiff)
+            sm_shifts_forward[:, :, vid_idx] .+= forward_shift
+            sm_shifts_backward[:, :, vid_idx] .+= 1.0f0 ./ forward_shift
+            sm_frame_shifted_freq[:, :, vid_idx] .+= forward_shift .* CUDA.CUFFT.fft(view(seg, :, :, j))
+        end
+        if i%10==0
+            GC.gc()
+        end
+        callback("Recalculating artifact corrections.", i, VideoLoaders.nsegs(vl))
+    end
+    sm_frame_unshifted_freq = CUDA.CUFFT.fft(sm_frame_unshifted, (1,2))
+
+    #N = Float32(length(window[3]))#nframes(vl)
+    N = [length(VideoLoaders.framerange_video(vl, vi)) for vi=1:nvids]
+    N = Float32.(CUDA.CuArray(reshape(max.(N, 1), 1, 1, nvids)))
+    unshifted_bg_freq = sm_frame_unshifted_freq ./ N
+    shifted_bg_freq = zero(unshifted_bg_freq)
+    for i=1:500
+        shifted_bg_freq .= sm_frame_shifted_freq ./ N .- (unshifted_bg_freq .* sm_shifts_forward./ N)
+        unshifted_bg_freq .= sm_frame_unshifted_freq ./ N .- (shifted_bg_freq .* sm_shifts_backward ./ N)
+        if i%100==0
+            callback("Correcting lens artifacts", i, 500)
+        end
+    end
+
+    vl.lensBg .= real.(CUDA.CUFFT.ifft(unshifted_bg_freq, (1, 2)))
+    return (;shifted_bg_freq, unshifted_bg_freq, sm_frame_shifted_freq,
+             sm_frame_unshifted_freq, sm_shifts_forward, sm_shifts_backward)
+end
+
+s="/mnt/dmclab/Emil/arrowmaze_raw_downsampled/animal6_v2_with_mcwindows.csv"
+nsplits=100
+pathPrefix = s[1:end-length(split(s, "/")[end])]
+videolist = CSV.File(s,comment="#")#DataFrames.DataFrame(CSV.File(s,comment="#"))
+sources = map(videolist) do r #map(eachrow(videolist))
+    hdfLoader = VideoLoaders.HDFLoader(pathPrefix * r.filename, r.hdfKey)
+    VideoLoaders.SplitLoader(hdfLoader, nsplits)
+end
+segs_per_video = [((i-1)*nsplits+1):i*nsplits for i=1:length(sources)]
+output_labels = String.(map(r->r.resultKey, videolist))
+baseLoader = VideoLoaders.MultiVideoLoader(sources, segs_per_video, output_labels)
+hostCache = VideoLoaders.CachedHostLoader(baseLoader; max_memory=3.2e10)
+filterLoader = VideoLoaders.BandpassFilterLoader(hostCache, 1, 300)
+#filterloader = VideoLoaders.FilterLoader(hostcache, filterkernel)
+#filterloader = BandpassFilterLoader(hostcache, 2, 100)
+mcwindows = map(enumerate(videolist)) do (i, r) #map(eachrow(videolist))
+    (r.mcwindowxmin:r.mcwindowxmax,
+     r.mcwindowymin:r.mcwindowymax,
+     VideoLoaders.framerange_video(filterLoader, i)[1:3000])
+end
+mcLoader = VideoLoaders.MotionCorrectionLoader(filterLoader, mcwindows)
+deviceCache = VideoLoaders.CachedDeviceLoader(mcLoader, max_memory=5e10)
+
+shifts = HDF5.h5open(fid->read(fid, "/motion_correction/shifts"), "animal6_test_init.h5")
+phaseDiffs = HDF5.h5open(fid->read(fid, "/motion_correction/phaseDiffs"), "animal6_test_init.h5")
+
+mcLoader.shifts .= shifts
+mcLoader.phaseDiffs .= phaseDiffs
+
+refitted_res = recalcLensBg(mcLoader, callback)
+
+HDF5.h5open("animal6_recalced_lens_bg.h5", "w") do fid
+    VideoLoaders.savetohdf(mcLoader, fid)
+    fid["/motion_correction/extra/unshifted_bg"] = (real.(CUDA.CUFFT.ifft(refitted_res.unshifted_bg_freq, (1, 2))) |> Array)
+    fid["/motion_correction/extra/shifted_bg"] = (real.(CUDA.CUFFT.ifft(refitted_res.shifted_bg_freq, (1, 2))) |> Array)
+end
+
+
+shifted_bgs = real.(CUDA.CUFFT.ifft(refitted_res.shifted_bg_freq, (1, 2))) |> Array
+
+i = 0
+i += 1; GLMakie.image!(shifted_bgs[:, :, i])
+
+GLMakie.image!(shifted_bgs[:, :, 1])
+GLMakie.image!(shifted_bgs[:, :, 8])
+GLMakie.image!(shifted_bgs[:, :, 10])
+
+extra_wins[1]
+target_frame = shifted_bgs[:, :, 8]
+zeroPaddedTarget = zero(target_frame)
+zeroPaddedTarget[extra_wins[1][1:2]...] = target_frame[extra_wins[1][1:2]...]
+GLMakie.image!(zeroPaddedTarget)
+
+w, h = VideoLoaders.framesize(mcLoader)
+full_window = [(1:w,1:h,VideoLoaders.framerange_video(mcLoader, i))
+                for i=1:VideoLoaders.nvideos(mcLoader)]
+targ = CUDA.cu(zeroPaddedTarget)
+windowFitResults = VideoLoaders.fitToFrame(mcLoader, [targ for _=1:size(shifted_bgs, 3)],
+                                           full_window; callback=callback, applyLensBg=true);
+
+HDF5.h5open("animal6_re_motion_corrected.h5", "w") do fid
+    VideoLoaders.savetohdf(mcLoader, fid)
+    fid["/motion_correction/extra/unshifted_bg"] = (real.(CUDA.CUFFT.ifft(windowFitResults.unshifted_bg_freq, (1, 2))) |> Array)
+    fid["/motion_correction/extra/shifted_bg"] = (real.(CUDA.CUFFT.ifft(windowFitResults.shifted_bg_freq, (1, 2))) |> Array)
+end
+
+
+HDF5.h5open("animal6_recalced_lens_bg.h5", "r") do fid
+    VideoLoaders.loadfromhdf(mcLoader, fid)
+end
+GLMakie.lines(mcLoader.shifts[:, 1])
+GLMakie.lines!(mcLoader.shifts[:, 2])
+
+new_shifts = copy(mcLoader.shifts)
+for i=2:size(shifts, 1)
+    d = mcLoader.shifts[i, :] .- new_shifts[i-1, :]
+    if any(d .> 50)
+        new_shifts[i, :] .= new_shifts[i-1,:]
+    end
+end
+GLMakie.lines(new_shifts[:, 1])
+GLMakie.lines!(new_shifts[:, 2])
+
+mcLoader.shifts .= new_shifts
+HDF5.h5open("animal6_semimanual_mc.h5", "w") do fid
+    VideoLoaders.savetohdf(mcLoader, fid)
+end
