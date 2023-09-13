@@ -1,5 +1,8 @@
 import Statistics
 import DSP
+using Plots
+using ProgressMeter
+import Optim
 
 struct Pool
     v::Float64
@@ -98,7 +101,7 @@ end
    
 T = 25000
 gamma = 0.9
-sigma = 10*1.0#0.2
+sigma = 10*1.5#0.2
 fake_s = 10 .* (randn(T).^4) .* (rand(T) .> 0.98)
 fake_c = similar(fake_s)
 fake_c[1] = fake_s[1]
@@ -120,12 +123,12 @@ plot(lambdas, c_cor, label="Correlation true C vs estimated C")
 plot!(lambdas, s_cor, label="Correlation true S vs estimated S")
 
 
-lambdas = 0:200
-gammas = 0.8:0.0025:0.95
+lambdas = 0:4:500
+gammas = 0.8:0.0025:0.98
 negent, c_cor, s_cor = joint_opt(fake_y, lambdas, gammas, fake_c, fake_s);
-heatmap(gammas, lambdas, log10.(negent))
-heatmap(gammas, lambdas, log10.(1.0 .- c_cor))
-heatmap(gammas, lambdas, log10.(1.0 .- s_cor))
+hm1 = heatmap(gammas, lambdas, log10.(negent))
+hm2 = heatmap(gammas, lambdas, log10.(1.0 .- c_cor))
+hm3 = heatmap(gammas, lambdas, log10.(1.0 .- s_cor))
 
 
 loss(x) = negentropy_est(oasis(fake_y, x[1], x[2])[1] .- fake_y)
@@ -150,3 +153,77 @@ p2 = plot(lambdas, negent*10000, label="Negentropy")
 p3 = plot(lambdas, kur, label="Kurtosis")
 plot!(p3, [extrema(lambdas)...], [3, 3], label="3")
 display(plot(p1,p2,p3, layout=(3,1)))
+
+real_negent, _, _ = joint_opt(ex_c, lambdas, gammas, zero(ex_c), zero(ex_c));
+
+p1 = plot(fake_s, color=2)
+offset = 400
+plot!(p1, fake_c .- offset, color=3)
+plot!(p1, fake_y .- 2 .* offset, color=1)
+
+p2 = plot()
+for (i, ex_lambda) in enumerate([0, 100, 1000])
+    c_fit, s_fit = oasis(fake_y, 0.9, ex_lambda)
+    plot!(p2, fake_y .- i*offset, color=1, alpha=.5)
+    plot!(p2, s_fit .- i*offset, color=2)
+    lbl = text(LaTeXString("\$\\lambda=$ex_lambda\$"), color=:black, halign=:left)
+    Plots.annotate!(6000, (0.4-i)*offset, lbl)
+end
+dpi=200
+plot(p1, p2, layout=(1, 2), size=(dpi*5, dpi*3), xlim=(6000, 12000),
+     legend=false, axis=false, grid=false, linewidth=2)
+savefig("../manuscript_figs/creating_fake_signal.svg")
+
+hm1 = heatmap(gammas, lambdas, log10.(negent),
+              colorbar_title="Residual negentropy",
+              colorbar_ticks=[-6, 1],
+              clim=(-7, 1),
+              colorbar_formatter=(x->"10^$x"),
+              xlabel=L"$\gamma$",
+              ylabel=L"$\lambda$")
+hm2 = heatmap(gammas, lambdas, -log10.(1.0 .- c_cor),
+              colorbar_title=L"$r(C_\mathrm{true}, C_\mathrm{est})$",
+              clim=(-log10(0.1), -log10(0.001)), xlabel=L"$\gamma$")
+hm3 = heatmap(gammas, lambdas, -log10.(1.0 .- s_cor),
+              colorbar_title=L"$r(S_\mathrm{true}, S_\mathrm{est})$",
+              clim=(-log10(0.1), -log10(0.001)), xlabel=L"$\gamma$")
+hm4 = heatmap(gammas, lambdas, log10.(real_negent),
+              colorbar_title="Residual negentropy",
+              colorbar_ticks=[-6, 1],
+              clim=(-7, 1),
+              colorbar_formatter=(x->"10^$x"),
+              xlabel=L"$\gamma$",
+              ylabel=L"$\lambda$")
+#hline!(hm3, .-log10.([.25, .1, .05, .01, .005, 0.001]))
+plot(hm1, hm2, hm3, hm4, layout=(1,4), size=(11*dpi, 1.5*dpi), margin=10mm)
+savefig("../manuscript_figs/fig3_heatmaps.svg")
+
+function fitted_signal(real)
+    zc = clamp.(real, 0.0, Inf)
+    loss(x) = negentropy_est(oasis(zc, x[1], x[2])[1] .- real)
+    #TODO constrain gamma, lambda > 0 (maybe for gamma something like > 0.5?)
+    opt = Optim.optimize(loss, [0.8, 50]; iterations=10)
+    gamma, lambda = opt.minimizer
+
+    #Temporary hack:
+    gamma = clamp(gamma, 0.3, 0.9999)
+    lambda = clamp(lambda, 0.0, Inf)
+
+    est_c, est_s = oasis(zc, gamma, lambda)
+    return est_s
+end
+
+plots = []
+for ex_neuron = [32,1,3,22,7,10]
+    ex_c = real_c[:, ex_neuron]
+    ymax = maximum(ex_c[2000:8000])
+    p = plot(ex_c, alpha=0.5, ylim=(-0.3ymax, ymax))
+    plot!(fitted_signal(ex_c))
+    annotate!(p, 2000, 0.8*ymax, "Neuron #$ex_neuron", fontsize=8)
+    push!(plots, p)
+end
+plot!(plots[end], [8000-20*60, 8000], [-24, -24], color=:black)
+annotate!(plots[end], 8000-10*30, -24, "1min", color=:black)
+plot(plots..., layout=(3,2), xlim=(2000, 8000),
+     legend=false, linewidth=2, axis=false, grid=false)
+savefig("../manuscript_figs/figure_3_examples.svg")

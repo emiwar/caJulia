@@ -36,7 +36,7 @@ function oasis(y, gamma, lambda)
             s[pool.t] = c[pool.t] - gamma*c[pool.t-1]
         end
     end
-    return c, s
+    return c, s, pools
 end
 
 function kurtosis(x)
@@ -54,7 +54,8 @@ end
 
 function oasis_opt!(sol::Sol, j)
     Rj = Array(sol.R[:, j])
-    loss(x) = negentropy_est(oasis(Rj, x[1], x[2])[1] .- Rj)
+    Rj_zeroclamp = clamp.(Rj, 0.0, Inf)
+    loss(x) = negentropy_est(oasis(Rj_zeroclamp, x[1], x[2])[1] .- Rj)
     #TODO constrain gamma, lambda > 0 (maybe for gamma something like > 0.5?)
     opt = Optim.optimize(loss, [sol.gammas[j], sol.lambdas[j]]; iterations=10)
     gamma, lambda = opt.minimizer
@@ -63,7 +64,7 @@ function oasis_opt!(sol::Sol, j)
     gamma = clamp(gamma, 0.3, 0.9999)
     lambda = clamp(lambda, 0.0, Inf)
     
-    sol.C[:, j], sol.S[:, j] = oasis(Rj, gamma, lambda)
+    sol.C[:, j], sol.S[:, j] = oasis(Rj_zeroclamp, gamma, lambda)
     sol.gammas[j] = gamma
     sol.lambdas[j] = lambda
 end

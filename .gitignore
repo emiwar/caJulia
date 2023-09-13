@@ -30,3 +30,4 @@ Manifest.toml
 *.h5
 lab_meeting_viz/*
 *.png
+.CondaPkg/*
